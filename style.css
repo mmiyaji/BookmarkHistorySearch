@@ -1,0 +1,44 @@
+body {
+    width: 350px;
+    padding: 10px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.result a {
+    text-decoration: none;
+}
+
+#resultsWrapper {
+    max-height:250px;
+    overflow-y: auto;
+}
+.url-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    font-size: 0.875em;
+    color: #6c757d;
+}
+ 
+.selected {
+    background-color: #0d6efd !important;  /* Bootstrap primary */
+    color: white;
+}
+html[data-bs-theme="dark"] .selected {
+    background-color: #375a7f !important;  /* より暗いブルー系 */
+    color: #ffffff;
+}
+#results li {
+    cursor: pointer;
+  }
+  
+  #results li:hover {
+    background-color: #e9ecef;
+  }
+  
+  html[data-bs-theme="dark"] #results li:hover {
+    background-color: #444;
+  }
+  
