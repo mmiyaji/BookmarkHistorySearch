@@ -43,17 +43,17 @@ chrome.storage.sync.get(["searchMode", "searchTarget"], (data) => {
 });
 
 function runSearch() {
-  const query = document.getElementById("searchInput").value.trim().toLowerCase();
-  const keywords = query.split(" ");
+  const rawQuery = document.getElementById("searchInput").value;
+  const normalizedQuery = normalizeForSearch(rawQuery);
+  const keywords = normalizedQuery.split(" ");
+
   const results = document.getElementById("results");
   const hitCountEl = document.getElementById("hitCount");
   results.innerHTML = "";
   hitCountEl.textContent = "";
   currentSelectedIndex = -1;
 
-  
-
-  if (query === "") return;
+  if (normalizedQuery === "") return;
   const matchFn = (text) => {
     const normalized = normalizeForSearch(text);
     return userOptions.searchMode === "and"
@@ -249,12 +249,53 @@ function normalizeForSearch(str) {
     .trim();
 }
 
-function highlightKeywords(text, keywords) {
-  let escaped = text;
-  for (const k of keywords) {
-    if (!k) continue;
-    const pattern = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); // エスケープ
-    escaped = escaped.replace(pattern, (match) => `<mark>${match}</mark>`);
+// function highlightKeywords(text, keywords) {
+//   let escaped = text;
+//   for (const k of keywords) {
+//     if (!k) continue;
+//     const pattern = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); // エスケープ
+//     escaped = escaped.replace(pattern, (match) => `<mark>${match}</mark>`);
+//   }
+//   return escaped;
+// }
+function highlightKeywords(text, rawKeywords) {
+  if (!rawKeywords?.length) return text;
+
+  const normalizedText = normalizeForSearch(text); // 正規化後の検索対象
+  const highlightMap = new Array(text.length).fill(false);
+
+  for (const raw of rawKeywords) {
+    if (!raw) continue;
+    const normKey = normalizeForSearch(raw);
+    let start = 0;
+
+    while (true) {
+      const index = normalizedText.indexOf(normKey, start);
+      if (index === -1) break;
+
+      // 対応する元の位置をマーク（同じ長さと仮定）
+      for (let i = index; i < index + normKey.length; i++) {
+        highlightMap[i] = true;
+      }
+      start = index + normKey.length;
+    }
   }
-  return escaped;
+
+  // 元の text を走査して <mark> タグを挿入
+  let result = '';
+  let inMark = false;
+
+  for (let i = 0; i < text.length; i++) {
+    if (highlightMap[i] && !inMark) {
+      result += '<mark>';
+      inMark = true;
+    } else if (!highlightMap[i] && inMark) {
+      result += '</mark>';
+      inMark = false;
+    }
+    result += text[i];
+  }
+  if (inMark) result += '</mark>';
+
+  return result;
 }
