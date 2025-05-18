@@ -44,20 +44,22 @@ chrome.storage.sync.get(["searchMode", "searchTarget"], (data) => {
 
 function runSearch() {
   const query = document.getElementById("searchInput").value.trim().toLowerCase();
+  const keywords = query.split(" ");
   const results = document.getElementById("results");
   const hitCountEl = document.getElementById("hitCount");
   results.innerHTML = "";
   hitCountEl.textContent = "";
   currentSelectedIndex = -1;
 
+  
+
   if (query === "") return;
-  const keywords = query.split(/\s+/);
-
-  const matchFn = (text) =>
-    userOptions.searchMode === "and"
-      ? keywords.every(k => text.includes(k))
-      : keywords.some(k => text.includes(k));
-
+  const matchFn = (text) => {
+    const normalized = normalizeForSearch(text);
+    return userOptions.searchMode === "and"
+      ? keywords.every(k => normalized.includes(k))
+      : keywords.some(k => normalized.includes(k));
+  };
   let hitCount = 0;
   if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
     chrome.bookmarks.getTree((nodes) => {
@@ -75,11 +77,13 @@ function runSearch() {
             : "";
           const favicon = `<img src="https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(b.url)}" class="me-1" />`;
           // ✅ HTMLに埋め込む
+          const displayTitle = highlightKeywords(b.title, keywords);
+          const displayURL = highlightKeywords(b.url, keywords); 
           li.innerHTML = `
             ${favicon}
             ${folderLabel}
-            <a href="${b.url}" target="_blank">${b.title}</a>
-            <div class="url-text text-muted small ms-4">${b.url}</div>
+            <a href="${b.url}" target="_blank">${displayTitle}</a>
+            <div class="url-text text-muted small ms-4">${displayURL}</div>
           `;
           li.title = b.url;
           li.addEventListener("click", (e) => {
@@ -114,11 +118,13 @@ function runSearch() {
             ? `<span class="badge bg-info me-1">${formatElapsedTime(h.lastVisitTime)}</span>`
             : "";
           // ✅ HTMLに埋め込む
+          const displayTitle = highlightKeywords(h.title, keywords);
+          const displayURL = highlightKeywords(h.url, keywords); 
           li.innerHTML = `
             ${favicon}
             ${elapsedTag}
-            <a href="${h.url}" target="_blank">${h.title}</a>
-            <div class="url-text text-muted small ms-4" title="${h.url}">${h.url}</div>
+            <a href="${h.url}" target="_blank">${displayTitle}</a>
+            <div class="url-text text-muted small ms-4" title="${h.url}">${displayURL}</div>
           `;
           li.title = h.url;
           li.addEventListener("click", (e) => {
@@ -216,4 +222,39 @@ function getOriginOrSchemeHost(url) {
     // 万一パースできなければそのまま
     return url;
   }
+}
+function toHiragana(str) {
+  return str.replace(/[\u30a1-\u30f6]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60)
+  );
+}
+function normalizeForSearch(str) {
+  return str
+    .normalize("NFKC")                       // 全角英数字・記号 → 半角
+    .toLowerCase()                          // 大文字→小文字
+    .replace(/[\u30a1-\u30f6]/g, ch =>      // カタカナ → ひらがな
+      String.fromCharCode(ch.charCodeAt(0) - 0x60)
+    )
+    .replace(/\s+/g, " ")                   // 空白を統一
+    .trim();
+}
+function normalizeForSearch(str) {
+  return str
+    .normalize("NFKC")                       // 全角英数字・記号 → 半角
+    .toLowerCase()                          // 大文字→小文字
+    .replace(/[\u30a1-\u30f6]/g, ch =>      // カタカナ → ひらがな
+      String.fromCharCode(ch.charCodeAt(0) - 0x60)
+    )
+    .replace(/\s+/g, " ")                   // 空白を統一
+    .trim();
+}
+
+function highlightKeywords(text, keywords) {
+  let escaped = text;
+  for (const k of keywords) {
+    if (!k) continue;
+    const pattern = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); // エスケープ
+    escaped = escaped.replace(pattern, (match) => `<mark>${match}</mark>`);
+  }
+  return escaped;
 }

@@ -2,8 +2,8 @@
 setlocal enabledelayedexpansion
 
 rem ZIPファイルの名前と出力先
-set VERSION=1.0
-set ZIP_NAME=JumpMultiStream_%VERSION%.zip
+set VERSION=1.3
+set ZIP_NAME=BookmarkHistorySearch_%VERSION%.zip
 set OUTPUT_DIR=%~dp0
 
 rem 除外リストを定義（スペース区切り）
