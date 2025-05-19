@@ -1,5 +1,4 @@
 body {
-    width: 350px;
     padding: 10px;
     box-sizing: border-box;
     overflow: hidden;
@@ -9,10 +8,29 @@ body {
     text-decoration: none;
 }
 
+.nav-tabs {
+    margin-bottom: 0;
+}
+.nav-tabs .nav-link {
+    font-size: 0.875rem; /* 約14px（Bootstrapのsmall相当） */
+    padding: 0.25rem 0.5rem;
+}
+/* 通常のバッジ（非アクティブタブ） */
+.nav-link .badge {
+    background-color: var(--bs-secondary);
+}
+
+/* アクティブなタブ内のバッジ */
+.nav-link.active .badge {
+    background-color: var(--bs-primary);
+    color: #fff;
+}
+
 #resultsWrapper {
-    max-height:250px;
+    margin-top: -1px; /* タブ下線と接続させる */
     overflow-y: auto;
 }
+
 .url-text {
     white-space: nowrap;
     overflow: hidden;
@@ -21,37 +39,51 @@ body {
     font-size: 0.875em;
     color: #6c757d;
 }
- 
+
 .selected {
-    background-color: #0d6efd !important;  /* Bootstrap primary */
+    background-color: #0d6efd !important;
     color: white;
 }
+
+.selected a {
+    color: white !important;
+    text-decoration: none; /* 必要に応じて */
+}
+.selected a:hover {
+    text-decoration: underline;
+}
+
 html[data-bs-theme="dark"] .selected {
-    background-color: #375a7f !important;  /* より暗いブルー系 */
+    background-color: #375a7f !important;
     color: #ffffff;
 }
-#results li {
+
+html[data-bs-theme="dark"] .selected a {
+    color: #ffffff !important;
+}
+#resultsWrapper li {
     cursor: pointer;
-  }
-  
-  #results li:hover {
+}
+
+#resultsWrapper li:hover {
     background-color: #e9ecef;
-  }
-  
-  html[data-bs-theme="dark"] #results li:hover {
+}
+
+
+html[data-bs-theme="dark"] #resultsWrapper li:hover {
     background-color: #444;
-  }
+}
+
 /* デフォルト（ライトモード） */
 mark {
     background-color: #fff3cd;
     color: #000;
     padding: 0 2px;
     border-radius: 2px;
-  }
-  
-  /* ダークモード用 */
-  html[data-bs-theme="dark"] mark {
+}
+
+/* ダークモード用 */
+html[data-bs-theme="dark"] mark {
     background-color: #ffc107;
     /* color: #fff; */
-  }
-  
+}

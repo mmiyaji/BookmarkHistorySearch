@@ -1,58 +1,119 @@
 document.getElementById("searchInput").focus();
 document.getElementById("searchInput").addEventListener("input", runSearch);
-// document.getElementById("openOptions").addEventListener("click", () => {
-//   if (chrome.runtime.openOptionsPage) {
-//     chrome.runtime.openOptionsPage();
-//   } else {
-//     // 古いバージョン対応
-//     window.open(chrome.runtime.getURL("options.html"));
-//   }
-// });
-let currentSelectedIndex = -1;
 document.getElementById("searchInput").addEventListener("keydown", (e) => {
-  const items = document.querySelectorAll("#results li");
+  const tabId = getActiveTabId();
+  const items = document.querySelectorAll(`#results-${tabId} li`);
+  let currentIndex = selectedIndexMap[tabId];
 
   if (e.key === "ArrowDown") {
     e.preventDefault();
     if (items.length === 0) return;
-    currentSelectedIndex = (currentSelectedIndex + 1) % items.length;
-    updateSelection(items);
+    currentIndex = (currentIndex + 1) % items.length;
+    selectedIndexMap[tabId] = currentIndex;
+    updateSelection(items, tabId);
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
     if (items.length === 0) return;
-    currentSelectedIndex = (currentSelectedIndex - 1 + items.length) % items.length;
-    updateSelection(items);
+    currentIndex = (currentIndex - 1 + items.length) % items.length;
+    selectedIndexMap[tabId] = currentIndex;
+    updateSelection(items, tabId);
   } else if (e.key === "Enter") {
-    if (currentSelectedIndex >= 0 && items[currentSelectedIndex]) {
-      const link = items[currentSelectedIndex].querySelector("a");
+    if (currentIndex >= 0 && items[currentIndex]) {
+      const link = items[currentIndex].querySelector("a");
       if (link) window.open(link.href, "_blank");
     }
   }
 });
+window.addEventListener("DOMContentLoaded", () => {
+  const input = document.getElementById("searchInput");
+  if (input.value.trim() === "") {
+    setPopupHeight(200);
+  }
+});
+
+document.querySelectorAll('#resultTabs .nav-link').forEach(tab => {
+  tab.addEventListener('click', () => {
+    setActiveTab(tab.dataset.target);
+
+    // 🔧 カーソルブラウジング対策：input にフォーカスを戻す
+    const input = document.getElementById("searchInput");
+    if (input) input.focus();
+  });
+});
+
+document.getElementById("clearInputBtn").addEventListener("click", () => {
+  const input = document.getElementById("searchInput");
+  input.value = "";
+  input.focus();
+  runSearch(); // 空文字で検索を再実行（結果クリア）
+});
+
 
 let userOptions = {
   searchMode: "and",
-  searchTarget: "both"
+  searchTarget: "both",
+  highlight: true,
+  historyMaxResults: 1000
 };
-chrome.storage.sync.get(["searchMode", "searchTarget"], (data) => {
+
+chrome.storage.sync.get([
+  "searchMode",
+  "searchTarget",
+  "highlight",
+  "historyMaxResults"
+], (data) => {
   userOptions = {
     searchMode: data.searchMode || "and",
-    searchTarget: data.searchTarget || "both"
+    searchTarget: data.searchTarget || "both",
+    highlight: data.highlight !== false,
+    historyMaxResults: parseInt(data.historyMaxResults) || 1000
   };
-  runSearch(); // 初回検索実行
+  applyTabVisibility(userOptions.searchTarget);
+  runSearch();
 });
 
+const selectedIndexMap = {
+  all: -1,
+  bookmarks: -1,
+  history: -1
+};
 function runSearch() {
   const rawQuery = document.getElementById("searchInput").value;
   const normalizedQuery = normalizeForSearch(rawQuery);
   const keywords = normalizedQuery.split(" ");
 
-  const results = document.getElementById("results");
-  const hitCountEl = document.getElementById("hitCount");
-  results.innerHTML = "";
-  hitCountEl.textContent = "";
-  currentSelectedIndex = -1;
+  Object.keys(selectedIndexMap).forEach(key => selectedIndexMap[key] = -1);
 
+  let countAll = 0;
+  let countBookmarks = 0;
+  let countHistory = 0;
+  
+  const resultsAll = document.getElementById("results-all");
+  const resultsBookmarks = document.getElementById("results-bookmarks");
+  const resultsHistory = document.getElementById("results-history");
+  
+  resultsAll.innerHTML = "";
+  resultsBookmarks.innerHTML = "";
+  resultsHistory.innerHTML = "";  
+  
+  // 検索欄が空の場合は件数バッジもリセットして終了
+  if (rawQuery === "") {
+    ["count-all", "count-bookmarks", "count-history"].forEach(id => {
+      const badge = document.getElementById(id);
+      badge.textContent = "0";
+      badge.style.display = "none"; // ← 必要に応じて
+    });
+    setPopupHeight(200);
+    insertMessageItem(resultsAll, "検索キーワードを入力してください");
+    insertMessageItem(resultsBookmarks, "検索キーワードを入力してください");
+    insertMessageItem(resultsHistory, "検索キーワードを入力してください");
+    return;
+  }
+  setPopupHeight(userOptions.popupHeight || 600);
+  // 空でない場合はバッジを表示（再表示）
+  ["count-all", "count-bookmarks", "count-history"].forEach(id => {
+    document.getElementById(id).style.display = "inline-block";
+  });
   if (normalizedQuery === "") return;
   const matchFn = (text) => {
     const normalized = normalizeForSearch(text);
@@ -60,7 +121,6 @@ function runSearch() {
       ? keywords.every(k => normalized.includes(k))
       : keywords.some(k => normalized.includes(k));
   };
-  let hitCount = 0;
   if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
     chrome.bookmarks.getTree((nodes) => {
       const bookmarks = [];
@@ -86,11 +146,12 @@ function runSearch() {
             <div class="url-text text-muted small ms-4">${displayURL}</div>
           `;
           li.title = b.url;
-          li.addEventListener("click", (e) => {
+          let liClone = li.cloneNode(true);
+          liClone.addEventListener("click", (e) => {
             // aタグを直接クリックした場合は処理しない
             if (e.target.tagName.toLowerCase() === "a") return;
           
-            const items = document.querySelectorAll("#results li");
+            const items = document.querySelectorAll("#resultsWrapper li");
             items.forEach(el => el.classList.remove("selected"));
             li.classList.add("selected");
           
@@ -99,15 +160,30 @@ function runSearch() {
               window.open(link.href, "_blank");
             }
           });
-          results.appendChild(li);
-          hitCount++;
+          resultsBookmarks.appendChild(liClone);
+          li.addEventListener("click", (e) => {
+            // aタグを直接クリックした場合は処理しない
+            if (e.target.tagName.toLowerCase() === "a") return;
+          
+            const items = document.querySelectorAll("#resultsWrapper li");
+            items.forEach(el => el.classList.remove("selected"));
+            li.classList.add("selected");
+          
+            const link = li.querySelector("a");
+            if (link) {
+              window.open(link.href, "_blank");
+            }
+          });
+          resultsAll.appendChild(li);
+          countBookmarks++;
+          countAll++;
         }
       }
-      hitCountEl.textContent = `${hitCount} 件ヒットしました`;
+      // hitCountEl.textContent = `${hitCount} 件ヒットしました`;
     });
   }
   if (userOptions.searchTarget === "history" || userOptions.searchTarget === "both") {    
-    chrome.history.search({ text: "", maxResults: 300 }, (historyResults) => {
+    chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults }, (historyResults) => {
       for (let h of historyResults) {
         const text = (h.title + " " + h.url).toLowerCase();
         if (matchFn(text)) {
@@ -127,6 +203,22 @@ function runSearch() {
             <div class="url-text text-muted small ms-4" title="${h.url}">${displayURL}</div>
           `;
           li.title = h.url;
+          let liClone = li.cloneNode(true);
+          liClone.addEventListener("click", (e) => {
+            // aタグを直接クリックした場合は処理しない
+            if (e.target.tagName.toLowerCase() === "a") return;
+          
+            const items = document.querySelectorAll("#resultsWrapper li");
+            items.forEach(el => el.classList.remove("selected"));
+            li.classList.add("selected");
+          
+            const link = li.querySelector("a");
+            if (link) {
+              window.open(link.href, "_blank");
+            }
+          });
+          resultsHistory.appendChild(liClone);
+          resultsAll.appendChild(liClone.cloneNode(true));
           li.addEventListener("click", (e) => {
             // aタグを直接クリックした場合は処理しない
             if (e.target.tagName.toLowerCase() === "a") return;
@@ -140,39 +232,28 @@ function runSearch() {
               window.open(link.href, "_blank");
             }
           });
-          results.appendChild(li);
-          hitCount++;
+          resultsAll.appendChild(li);
+          countHistory++;
+          countAll++;          
         }
       }
-      hitCountEl.textContent = `${hitCount} 件ヒットしました`;
+      document.getElementById("count-all").textContent = countAll;
+      document.getElementById("count-bookmarks").textContent = countBookmarks;
+      document.getElementById("count-history").textContent = countHistory;
+      // hitCountEl.textContent = `${hitCount} 件ヒットしました`;
+      if (countAll === 0) {
+        insertMessageItem(resultsAll, "一致する結果はありませんでした");
+      }
+      if (countBookmarks === 0) {
+        insertMessageItem(resultsBookmarks, "一致する結果はありませんでした");
+      }
+      if (countHistory === 0) {
+        insertMessageItem(resultsHistory, "一致する結果はありませんでした");
+      }
     });
   }
 }
 
-// // 再帰的に全てのブックマークを取得する関数
-// function collectBookmarks(nodes, result) {
-//   for (let node of nodes) {
-//     if (node.url) {
-//       result.push(node);
-//     } else if (node.children) {
-//       collectBookmarks(node.children, result);
-//     }
-//   }
-// }
-// function collectBookmarks(nodes, result, path = []) {
-//   for (let node of nodes) {
-//     if (node.url) {
-//       // "ブックマーク バー" / "Bookmarks Bar" のパスを除外
-//       const displayPath = path.filter(p => !["ブックマーク バー", "Bookmarks Bar"].includes(p));
-//       result.push({
-//         ...node,
-//         folderPath: displayPath
-//       });
-//     } else if (node.children) {
-//       collectBookmarks(node.children, result, [...path, node.title]);
-//     }
-//   }
-// }
 function collectBookmarks(nodes, result, path = []) {
   for (let node of nodes) {
     if (node.url) {
@@ -249,17 +330,9 @@ function normalizeForSearch(str) {
     .trim();
 }
 
-// function highlightKeywords(text, keywords) {
-//   let escaped = text;
-//   for (const k of keywords) {
-//     if (!k) continue;
-//     const pattern = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); // エスケープ
-//     escaped = escaped.replace(pattern, (match) => `<mark>${match}</mark>`);
-//   }
-//   return escaped;
-// }
 function highlightKeywords(text, rawKeywords) {
   if (!rawKeywords?.length) return text;
+  if (!userOptions.highlight) return text;
 
   const normalizedText = normalizeForSearch(text); // 正規化後の検索対象
   const highlightMap = new Array(text.length).fill(false);
@@ -298,4 +371,69 @@ function highlightKeywords(text, rawKeywords) {
   if (inMark) result += '</mark>';
 
   return result;
+}
+function applyTabVisibility(target) {
+  const allTab = document.getElementById("tab-all");
+  const bookmarksTab = document.getElementById("tab-bookmarks");
+  const historyTab = document.getElementById("tab-history");
+
+  // 初期化（全て表示）
+  allTab.parentElement.style.display = "none";
+  bookmarksTab.parentElement.style.display = "none";
+  historyTab.parentElement.style.display = "none";
+
+  // 対象だけ表示＆アクティブ
+  switch (target) {
+    case "both":
+      allTab.parentElement.style.display = "";
+      bookmarksTab.parentElement.style.display = "";
+      historyTab.parentElement.style.display = "";
+      setActiveTab("all");
+      break;
+    case "bookmarks":
+      bookmarksTab.parentElement.style.display = "";
+      setActiveTab("bookmarks");
+      break;
+    case "history":
+      historyTab.parentElement.style.display = "";
+      setActiveTab("history");
+      break;
+  }
+}
+
+function setActiveTab(targetId) {
+  document.querySelectorAll('#resultTabs .nav-link').forEach(btn => {
+    const isActive = btn.dataset.target === targetId;
+    btn.classList.toggle("active", isActive);
+  });
+
+  ["all", "bookmarks", "history"].forEach(id => {
+    const list = document.getElementById(`results-${id}`);
+    list.classList.toggle("d-none", id !== targetId);
+  });
+  // 選択状態を更新  
+  // selectedIndexMap[targetId] = -1;
+  const items = document.querySelectorAll(`#results-${targetId} li`);
+  updateSelection(items, targetId);
+}
+function getActiveTabId() {
+  const active = document.querySelector("#resultTabs .nav-link.active");
+  return active?.dataset.target || "all";
+}
+function updateSelection(items, tabId) {
+  items.forEach(el => el.classList.remove("selected"));
+  const index = selectedIndexMap[tabId];
+  if (items[index]) {
+    items[index].classList.add("selected");
+    items[index].scrollIntoView({ block: "nearest" });
+  }
+}
+function setPopupHeight(heightPx) {
+  document.documentElement.style.height = `${heightPx}px`;
+}
+function insertMessageItem(listElement, message) {
+  const li = document.createElement("li");
+  li.className = "list-group-item text-muted fst-italic";
+  li.textContent = message;
+  listElement.appendChild(li);
 }

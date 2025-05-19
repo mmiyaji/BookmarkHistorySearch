@@ -9,17 +9,38 @@
   <link rel="stylesheet" href="style.css" />
   </head>
 <body>
-  <h5>Bookmark & History Search</h5>
+  <h6>Bookmark & History Search</h6>
 
   <div class="mb-3">
-    <input type="text" id="searchInput" class="form-control" placeholder="検索ワード（スペース区切り）">
+    <div class="input-group">
+      <input type="text" id="searchInput" class="form-control" placeholder="検索ワード（スペース区切り）">
+      <button id="clearInputBtn" class="btn btn-outline-secondary" type="button" title="クリア">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
   </div>
-
-  <p id="hitCount" class="text-muted small"></p>
-
-  <!-- 結果ラッパーに max-height を指定 -->
+  <ul class="nav nav-tabs" id="resultTabs">
+    <li class="nav-item">
+      <button class="nav-link" id="tab-all" data-target="all" type="button">
+        すべて <span class="badge" id="count-all">0</span>
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="tab-bookmarks" data-target="bookmarks" type="button">
+        ブックマーク <span class="badge" id="count-bookmarks">0</span>
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="tab-history" data-target="history" type="button">
+        履歴 <span class="badge" id="count-history">0</span>
+      </button>
+    </li>
+  </ul>
+    
   <div id="resultsWrapper">
-    <ul id="results" class="list-group result"></ul>
+    <ul id="results-all" class="list-group result"></ul>
+    <ul id="results-bookmarks" class="list-group result d-none"></ul>
+    <ul id="results-history" class="list-group result d-none"></ul>
   </div>
   <script src="popup.js"></script>
 </body>

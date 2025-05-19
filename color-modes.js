@@ -5,3 +5,9 @@ chrome.storage.sync.get("theme", (data) => {
         theme === "auto" ? (prefersDark ? "dark" : "light") : theme;
     document.documentElement.setAttribute("data-bs-theme", appliedTheme);
 });
+chrome.storage.sync.get(["popupWidth", "popupHeight"], (data) => {
+    const w = data.popupWidth || 350;
+    const h = data.popupHeight || 600;
+    document.documentElement.style.width = `${w}px`;
+    document.documentElement.style.height = `${h}px`;
+});
