@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Bookmark & History Search",
+  "name": "Tadorun - Bookmark & History Search",
   "version": "1.4",
   "description": "Search bookmarks and/or history with AND/OR logic",
   "permissions": [
