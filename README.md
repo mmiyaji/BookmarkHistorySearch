@@ -6,3 +6,5 @@ Chrome Extention
 
 
 検索ボックスからブックマークと履歴を検索するシンプルな拡張機能です
+
+[Chrome Extention Store](https://chromewebstore.google.com/detail/fjlafgfjokeemphjaeapcmfmcicehahi?utm_source=item-share-cb)
