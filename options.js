@@ -5,7 +5,7 @@ const DEFAULT_SETTINGS = {
   popupWidth: 350,
   popupHeight: 600,
   highlight: true,
-  historyMaxResults: 1000
+  historyMaxResults: 10000
 };
 
 function setFormFields(data) {

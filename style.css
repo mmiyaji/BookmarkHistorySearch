@@ -69,6 +69,9 @@ html[data-bs-theme="dark"] .selected a {
     background-color: #e9ecef;
 }
 
+#openOptions:hover {
+    color: var(--bs-primary); /* ブートストラップのテーマ色 */
+}
 
 html[data-bs-theme="dark"] #resultsWrapper li:hover {
     background-color: #444;

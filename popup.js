@@ -1,3 +1,28 @@
+let cachedHistory = [];
+let historyCacheTimestamp = 0; // UNIXタイム（ミリ秒）
+const HISTORY_CACHE_TTL_MS = 60 * 1000; // 1分間
+let historyVisitMap = {};
+
+function preloadHistory() {
+  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults }, (results) => {
+    cachedHistory = results;
+    historyCacheTimestamp = Date.now();
+    groupHistoryByUrl(results);
+  });
+}
+
+document.getElementById("openOptions").addEventListener("click", () => {
+  if (chrome.runtime.openOptionsPage) {
+    chrome.runtime.openOptionsPage();
+  } else {
+    window.open(chrome.runtime.getURL("options.html"));
+  }
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+  preloadHistory(); // ポップアップ表示直後に実行
+});
+
 document.getElementById("searchInput").focus();
 document.getElementById("searchInput").addEventListener("input", runSearch);
 document.getElementById("searchInput").addEventListener("keydown", (e) => {
@@ -78,7 +103,7 @@ const selectedIndexMap = {
   history: -1
 };
 function runSearch() {
-  const rawQuery = document.getElementById("searchInput").value;
+  const rawQuery = document.getElementById("searchInput").value.trim();
   const normalizedQuery = normalizeForSearch(rawQuery);
   const keywords = normalizedQuery.split(" ");
 
@@ -98,6 +123,8 @@ function runSearch() {
   
   // 検索欄が空の場合は件数バッジもリセットして終了
   if (rawQuery === "") {
+    cachedHistory = [];
+    historyCacheTimestamp = 0;
     ["count-all", "count-bookmarks", "count-history"].forEach(id => {
       const badge = document.getElementById(id);
       badge.textContent = "0";
@@ -121,135 +148,28 @@ function runSearch() {
       ? keywords.every(k => normalized.includes(k))
       : keywords.some(k => normalized.includes(k));
   };
-  if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
-    chrome.bookmarks.getTree((nodes) => {
-      const bookmarks = [];
-      collectBookmarks(nodes, bookmarks);
+  if (userOptions.searchTarget === "history" || userOptions.searchTarget === "both") {
+    loadHistoryOnce((historyResults) => {
+      const grouped = groupHistoryByUrl(historyResults);
   
-      for (let b of bookmarks) {
-        const text = (b.title + " " + b.url).toLowerCase();
-        if (matchFn(text)) {
-          const li = document.createElement("li");
-          li.className = "list-group-item";
-  
-          const folderLabel = b.folderPath && b.folderPath.length > 0
-            ? `<span class="badge bg-secondary me-1">📁 ${b.folderPath.join(" / ")}</span>`
-            : "";
-          const favicon = `<img src="https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(b.url)}" class="me-1" />`;
-          // ✅ HTMLに埋め込む
-          const displayTitle = highlightKeywords(b.title, keywords);
-          const displayURL = highlightKeywords(b.url, keywords); 
-          li.innerHTML = `
-            ${favicon}
-            ${folderLabel}
-            <a href="${b.url}" target="_blank">${displayTitle}</a>
-            <div class="url-text text-muted small ms-4">${displayURL}</div>
-          `;
-          li.title = b.url;
-          let liClone = li.cloneNode(true);
-          liClone.addEventListener("click", (e) => {
-            // aタグを直接クリックした場合は処理しない
-            if (e.target.tagName.toLowerCase() === "a") return;
-          
-            const items = document.querySelectorAll("#resultsWrapper li");
-            items.forEach(el => el.classList.remove("selected"));
-            li.classList.add("selected");
-          
-            const link = li.querySelector("a");
-            if (link) {
-              window.open(link.href, "_blank");
-            }
-          });
-          resultsBookmarks.appendChild(liClone);
-          li.addEventListener("click", (e) => {
-            // aタグを直接クリックした場合は処理しない
-            if (e.target.tagName.toLowerCase() === "a") return;
-          
-            const items = document.querySelectorAll("#resultsWrapper li");
-            items.forEach(el => el.classList.remove("selected"));
-            li.classList.add("selected");
-          
-            const link = li.querySelector("a");
-            if (link) {
-              window.open(link.href, "_blank");
-            }
-          });
-          resultsAll.appendChild(li);
-          countBookmarks++;
-          countAll++;
-        }
+      if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
+        chrome.bookmarks.getTree((nodes) => {
+          countBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
+          countHistory = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
+          countAll = countBookmarks + countHistory;
+          updateBadgeAndMessages(countAll, countBookmarks, countHistory);
+        });
+      } else {
+        countHistory = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
+        countAll = countHistory;
+        updateBadgeAndMessages(countAll, 0, countHistory);
       }
-      // hitCountEl.textContent = `${hitCount} 件ヒットしました`;
     });
-  }
-  if (userOptions.searchTarget === "history" || userOptions.searchTarget === "both") {    
-    chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults }, (historyResults) => {
-      for (let h of historyResults) {
-        const text = (h.title + " " + h.url).toLowerCase();
-        if (matchFn(text)) {
-          const li = document.createElement("li");
-          li.className = "list-group-item";
-          const favicon = `<img src="https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(h.url)}" class="me-1" />`;
-          const elapsedTag = h.lastVisitTime
-            ? `<span class="badge bg-info me-1">${formatElapsedTime(h.lastVisitTime)}</span>`
-            : "";
-          // ✅ HTMLに埋め込む
-          const displayTitle = highlightKeywords(h.title, keywords);
-          const displayURL = highlightKeywords(h.url, keywords); 
-          li.innerHTML = `
-            ${favicon}
-            ${elapsedTag}
-            <a href="${h.url}" target="_blank">${displayTitle}</a>
-            <div class="url-text text-muted small ms-4" title="${h.url}">${displayURL}</div>
-          `;
-          li.title = h.url;
-          let liClone = li.cloneNode(true);
-          liClone.addEventListener("click", (e) => {
-            // aタグを直接クリックした場合は処理しない
-            if (e.target.tagName.toLowerCase() === "a") return;
-          
-            const items = document.querySelectorAll("#resultsWrapper li");
-            items.forEach(el => el.classList.remove("selected"));
-            li.classList.add("selected");
-          
-            const link = li.querySelector("a");
-            if (link) {
-              window.open(link.href, "_blank");
-            }
-          });
-          resultsHistory.appendChild(liClone);
-          resultsAll.appendChild(liClone.cloneNode(true));
-          li.addEventListener("click", (e) => {
-            // aタグを直接クリックした場合は処理しない
-            if (e.target.tagName.toLowerCase() === "a") return;
-          
-            const items = document.querySelectorAll("#results li");
-            items.forEach(el => el.classList.remove("selected"));
-            li.classList.add("selected");
-          
-            const link = li.querySelector("a");
-            if (link) {
-              window.open(link.href, "_blank");
-            }
-          });
-          resultsAll.appendChild(li);
-          countHistory++;
-          countAll++;          
-        }
-      }
-      document.getElementById("count-all").textContent = countAll;
-      document.getElementById("count-bookmarks").textContent = countBookmarks;
-      document.getElementById("count-history").textContent = countHistory;
-      // hitCountEl.textContent = `${hitCount} 件ヒットしました`;
-      if (countAll === 0) {
-        insertMessageItem(resultsAll, "一致する結果はありませんでした");
-      }
-      if (countBookmarks === 0) {
-        insertMessageItem(resultsBookmarks, "一致する結果はありませんでした");
-      }
-      if (countHistory === 0) {
-        insertMessageItem(resultsHistory, "一致する結果はありませんでした");
-      }
+  } else if (userOptions.searchTarget === "bookmarks") {
+    chrome.bookmarks.getTree((nodes) => {
+      countBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
+      countAll = countBookmarks;
+      updateBadgeAndMessages(countAll, countBookmarks, 0);
     });
   }
 }
@@ -436,4 +356,182 @@ function insertMessageItem(listElement, message) {
   li.className = "list-group-item text-muted fst-italic";
   li.textContent = message;
   listElement.appendChild(li);
+}
+
+function loadHistoryOnce(callback) {
+  const now = Date.now();
+  const isCacheValid = cachedHistory.length > 0 && (now - historyCacheTimestamp < HISTORY_CACHE_TTL_MS);
+
+  if (isCacheValid) {
+    callback(cachedHistory);
+    return;
+  }
+
+  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults }, (results) => {
+    cachedHistory = results;
+    historyCacheTimestamp = Date.now(); // 新しいタイムスタンプ記録
+    callback(results);
+  });
+}
+function groupHistoryByUrl(results) {
+  const grouped = {};
+  historyVisitMap = {};
+
+  for (const item of results) {
+    const url = item.url;
+    if (!grouped[url]) {
+      grouped[url] = {
+        ...item,
+        visitCount: item.visitCount
+      };
+    } else {
+      grouped[url].visitCount += item.visitCount;
+    }
+
+    if (!historyVisitMap[url]) {
+      historyVisitMap[url] = item.visitCount;
+    } else {
+      historyVisitMap[url] += item.visitCount;
+    }
+  }
+
+  return Object.values(grouped);
+}
+function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks) {
+  let count = 0;
+  const bookmarks = [];
+  collectBookmarks(nodes, bookmarks);
+  for (let b of bookmarks) {
+    const text = (b.title + " " + b.url).toLowerCase();
+    
+    if (matchFn(text)) {
+      const li = document.createElement("li");
+      li.className = "list-group-item";
+
+      const folderLabel = b.folderPath && b.folderPath.length > 0
+        ? `<span class="badge bg-secondary me-1">📁 ${b.folderPath.join(" / ")}</span>`
+        : "";
+      const visitCount = historyVisitMap[b.url] || 0;
+      const historyBadge = visitCount > 0
+        ? `<span class="badge bg-info text-dark me-1">${visitCount} 回表示</span>`
+        : "";
+      const favicon = `<img src="https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(b.url)}" class="me-1" />`;
+      // ✅ HTMLに埋め込む
+      const displayTitle = highlightKeywords(b.title, keywords);
+      const displayURL = highlightKeywords(b.url, keywords); 
+      li.innerHTML = `
+        ${favicon}
+        ${folderLabel}
+        ${historyBadge}
+        <a href="${b.url}" target="_blank">${displayTitle}</a>
+        <div class="url-text text-muted small ms-4">${displayURL}</div>
+      `;
+      li.title = b.url;
+      let liClone = li.cloneNode(true);
+      liClone.addEventListener("click", (e) => {
+        // aタグを直接クリックした場合は処理しない
+        if (e.target.tagName.toLowerCase() === "a") return;
+      
+        const items = document.querySelectorAll("#resultsWrapper li");
+        items.forEach(el => el.classList.remove("selected"));
+        li.classList.add("selected");
+      
+        const link = li.querySelector("a");
+        if (link) {
+          window.open(link.href, "_blank");
+        }
+      });
+      resultsBookmarks.appendChild(liClone);
+      li.addEventListener("click", (e) => {
+        // aタグを直接クリックした場合は処理しない
+        if (e.target.tagName.toLowerCase() === "a") return;
+      
+        const items = document.querySelectorAll("#resultsWrapper li");
+        items.forEach(el => el.classList.remove("selected"));
+        li.classList.add("selected");
+      
+        const link = li.querySelector("a");
+        if (link) {
+          window.open(link.href, "_blank");
+        }
+      });
+      resultsAll.appendChild(li);
+      count++;
+    }
+  }
+  return count;
+}
+function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
+  let count = 0;
+  for (let h of grouped) {
+    const text = (h.title + " " + h.url).toLowerCase();
+    if (matchFn(text)) {
+      const li = document.createElement("li");
+      li.className = "list-group-item";
+      const favicon = `<img src="https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(h.url)}" class="me-1" />`;
+      const elapsedTag = h.lastVisitTime
+        ? `<span class="badge bg-info me-1">${formatElapsedTime(h.lastVisitTime)}</span>`
+        : "";
+      const countBadge = h.visitCount > 0
+        ? `<span class="badge bg-info text-dark me-1">${h.visitCount} 回表示</span>`
+        : "";
+      // ✅ HTMLに埋め込む
+      const displayTitle = highlightKeywords(h.title, keywords);
+      const displayURL = highlightKeywords(h.url, keywords); 
+      li.innerHTML = `
+        ${favicon}
+        ${elapsedTag}
+        ${countBadge} <!-- Added countBadge to HTML -->
+        <a href="${h.url}" target="_blank">${displayTitle}</a>
+        <div class="url-text text-muted small ms-4" title="${h.url}">${displayURL}</div>
+      `;
+      li.title = h.url;
+      let liClone = li.cloneNode(true);
+      liClone.addEventListener("click", (e) => {
+        // aタグを直接クリックした場合は処理しない
+        if (e.target.tagName.toLowerCase() === "a") return;
+      
+        const items = document.querySelectorAll("#resultsWrapper li");
+        items.forEach(el => el.classList.remove("selected"));
+        li.classList.add("selected");
+      
+        const link = li.querySelector("a");
+        if (link) {
+          window.open(link.href, "_blank");
+        }
+      });
+      resultsHistory.appendChild(liClone);
+      li.addEventListener("click", (e) => {
+        // aタグを直接クリックした場合は処理しない
+        if (e.target.tagName.toLowerCase() === "a") return;
+      
+        const items = document.querySelectorAll("#results li");
+        items.forEach(el => el.classList.remove("selected"));
+        li.classList.add("selected");
+      
+        const link = li.querySelector("a");
+        if (link) {
+          window.open(link.href, "_blank");
+        }
+      });
+      resultsAll.appendChild(li);
+      count++;
+    }
+  }
+  return count;
+}
+function updateBadgeAndMessages(countAll, countBookmarks, countHistory) {
+  document.getElementById("count-all").textContent = countAll;
+  document.getElementById("count-bookmarks").textContent = countBookmarks;
+  document.getElementById("count-history").textContent = countHistory;
+
+  if (countAll === 0) {
+    insertMessageItem(document.getElementById("results-all"), "一致する結果はありませんでした");
+  }
+  if (countBookmarks === 0) {
+    insertMessageItem(document.getElementById("results-bookmarks"), "一致する結果はありませんでした");
+  }
+  if (countHistory === 0) {
+    insertMessageItem(document.getElementById("results-history"), "一致する結果はありませんでした");
+  }
 }
