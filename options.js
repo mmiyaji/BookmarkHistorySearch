@@ -5,7 +5,8 @@ const DEFAULT_SETTINGS = {
   popupWidth: 350,
   popupHeight: 600,
   highlight: true,
-  historyMaxResults: 10000
+  historyMaxResults: 10000,
+  historyPeriod: 30,
 };
 
 function setFormFields(data) {
@@ -16,6 +17,7 @@ function setFormFields(data) {
   document.getElementById("popupHeight").value = data.popupHeight || DEFAULT_SETTINGS.popupHeight;
   document.getElementById("highlight").checked = data.highlight !== undefined ? data.highlight : DEFAULT_SETTINGS.highlight;
   document.getElementById("historyMaxResults").value = data.historyMaxResults || DEFAULT_SETTINGS.historyMaxResults;
+  document.getElementById("historyPeriod").value = data.historyPeriod || DEFAULT_SETTINGS.historyPeriod;
   applyTheme(data.theme || DEFAULT_SETTINGS.theme);
 }
 
@@ -41,6 +43,7 @@ document.getElementById("saveBtn").addEventListener("click", () => {
   const popupHeight = document.getElementById("popupHeight").value;
   const highlight = document.getElementById("highlight").checked;
   const historyMaxResults = document.getElementById("historyMaxResults").value;
+  const historyPeriod = document.getElementById("historyPeriod").value;
   // 入力値の検証
   if (!["and", "or"].includes(searchMode)) {
     document.getElementById("status").textContent = "検索モードは「and」または「or」のみです。";
@@ -65,7 +68,14 @@ document.getElementById("saveBtn").addEventListener("click", () => {
     setTimeout(() => (document.getElementById("status").textContent = ""), 2000);
     return;
   }
-  chrome.storage.sync.set({ searchMode, searchTarget, theme, popupWidth, popupHeight, highlight, historyMaxResults }, () => {
+  const isValidHistoryMaxResults = !isNaN(historyMaxResults) && historyMaxResults > 0;
+  if (!isValidHistoryMaxResults) {
+    document.getElementById("status").textContent = "履歴の最大結果数は正の数でなければなりません。";
+    setTimeout(() => (document.getElementById("status").textContent = ""), 2000);
+    return;
+  }
+  // 保存処理
+  chrome.storage.sync.set({ searchMode, searchTarget, theme, popupWidth, popupHeight, highlight, historyMaxResults, historyPeriod }, () => {
     document.getElementById("status").textContent = "保存しました！";
     setTimeout(() => (document.getElementById("status").textContent = ""), 2000);
   });

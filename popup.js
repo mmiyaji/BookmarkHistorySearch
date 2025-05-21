@@ -1,12 +1,48 @@
+let userOptions = {
+  searchMode: "and",
+  searchTarget: "both",
+  highlight: true,
+  historyMaxResults: 10000,
+  historyPeriod: 30,
+};
 let cachedHistory = [];
 let historyCacheTimestamp = 0; // UNIXタイム（ミリ秒）
 const HISTORY_CACHE_TTL_MS = 60 * 1000; // 1分間
 let historyVisitMap = {};
 
+chrome.storage.sync.get([
+  "searchMode",
+  "searchTarget",
+  "highlight",
+  "historyMaxResults",
+  "historyPeriod"
+], (data) => {
+  userOptions = {
+    searchMode: data.searchMode || "and",
+    searchTarget: data.searchTarget || "both",
+    highlight: data.highlight !== false,
+    historyMaxResults: parseInt(data.historyMaxResults) || 10000,
+    historyPeriod: data.historyPeriod || 30
+  };
+  applyTabVisibility(userOptions.searchTarget);
+  runSearch();
+});
+
+const selectedIndexMap = {
+  all: -1,
+  bookmarks: -1,
+  history: -1
+};
+
 function preloadHistory() {
-  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults }, (results) => {
+  const now = Date.now();
+  let startTime = 0;
+  if (userOptions.historyPeriod !== "all") {
+    startTime = now - parseInt(userOptions.historyPeriod) * 24 * 60 * 60 * 1000;
+  }
+  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults, startTime: startTime }, (results) => {
     cachedHistory = results;
-    historyCacheTimestamp = Date.now();
+    historyCacheTimestamp = now;
     groupHistoryByUrl(results);
   });
 }
@@ -72,36 +108,6 @@ document.getElementById("clearInputBtn").addEventListener("click", () => {
   input.focus();
   runSearch(); // 空文字で検索を再実行（結果クリア）
 });
-
-
-let userOptions = {
-  searchMode: "and",
-  searchTarget: "both",
-  highlight: true,
-  historyMaxResults: 1000
-};
-
-chrome.storage.sync.get([
-  "searchMode",
-  "searchTarget",
-  "highlight",
-  "historyMaxResults"
-], (data) => {
-  userOptions = {
-    searchMode: data.searchMode || "and",
-    searchTarget: data.searchTarget || "both",
-    highlight: data.highlight !== false,
-    historyMaxResults: parseInt(data.historyMaxResults) || 1000
-  };
-  applyTabVisibility(userOptions.searchTarget);
-  runSearch();
-});
-
-const selectedIndexMap = {
-  all: -1,
-  bookmarks: -1,
-  history: -1
-};
 function runSearch() {
   const rawQuery = document.getElementById("searchInput").value.trim();
   const normalizedQuery = normalizeForSearch(rawQuery);
@@ -128,7 +134,7 @@ function runSearch() {
     ["count-all", "count-bookmarks", "count-history"].forEach(id => {
       const badge = document.getElementById(id);
       badge.textContent = "0";
-      badge.style.display = "none"; // ← 必要に応じて
+      badge.style.display = "none";
     });
     setPopupHeight(200);
     insertMessageItem(resultsAll, "検索キーワードを入力してください");
@@ -364,10 +370,15 @@ function loadHistoryOnce(callback) {
 
   if (isCacheValid) {
     callback(cachedHistory);
+    console.log("キャッシュを使用");
     return;
   }
+  let startTime = 0;
+  if (userOptions.historyPeriod !== "all") {
+    startTime = now - parseInt(userOptions.historyPeriod) * 24 * 60 * 60 * 1000;
+  }
 
-  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults }, (results) => {
+  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults, startTime: startTime }, (results) => {
     cachedHistory = results;
     historyCacheTimestamp = Date.now(); // 新しいタイムスタンプ記録
     callback(results);

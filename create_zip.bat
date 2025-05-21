@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 rem ZIPファイルの名前と出力先
-set VERSION=2.0
+set VERSION=2.1
 set ZIP_NAME=BookmarkHistorySearch_%VERSION%.zip
 set OUTPUT_DIR=%~dp0
 

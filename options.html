@@ -35,8 +35,23 @@
     </div>
     
     <div class="mb-4">
+      <label class="form-label">履歴検索の対象期間</label>
+      <select id="historyPeriod" class="form-select">
+        <option value="1">過去 1 日</option>
+        <option value="7">過去 1 週間</option>
+        <option value="30">過去 1 ヶ月</option>
+        <option value="90">過去 3 ヶ月</option>
+        <option value="all">全期間</option>
+      </select>
+      <div class="form-text">
+        ※ Chrome の履歴は通常「過去 3か月間」まで保存されています。<br>
+        検索対象を広げすぎると読み込みに時間がかかる場合があります。
+      </div>
+    </div>
+
+    <div class="mb-4">
       <label class="form-label">履歴検索の最大件数</label>
-      <input type="number" class="form-control" id="historyMaxResults" min="10" max="500" step="10">
+      <input type="number" class="form-control" id="historyMaxResults" min="10" step="100">
     </div>
     
     <h4>表示設定</h4>
