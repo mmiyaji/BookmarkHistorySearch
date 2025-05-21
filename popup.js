@@ -481,7 +481,7 @@ function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
       li.className = "list-group-item";
       const favicon = `<img src="https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(h.url)}" class="me-1" />`;
       const elapsedTag = h.lastVisitTime
-        ? `<span class="badge bg-info me-1">${formatElapsedTime(h.lastVisitTime)}</span>`
+        ? `<span class="badge bg-primary me-1">${formatElapsedTime(h.lastVisitTime)}</span>`
         : "";
       const countBadge = h.visitCount > 0
         ? `<span class="badge bg-info text-dark me-1">${h.visitCount} 回表示</span>`
