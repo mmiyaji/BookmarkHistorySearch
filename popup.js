@@ -9,6 +9,7 @@ let cachedHistory = [];
 let historyCacheTimestamp = 0; // UNIXタイム（ミリ秒）
 const HISTORY_CACHE_TTL_MS = 60 * 1000; // 1分間
 let historyVisitMap = {};
+let currentSearchId = 0;
 
 chrome.storage.sync.get([
   "searchMode",
@@ -112,6 +113,7 @@ function runSearch() {
   const rawQuery = document.getElementById("searchInput").value.trim();
   const normalizedQuery = normalizeForSearch(rawQuery);
   const keywords = normalizedQuery.split(" ");
+  const thisSearchId = ++currentSearchId;
 
   Object.keys(selectedIndexMap).forEach(key => selectedIndexMap[key] = -1);
 
@@ -156,10 +158,12 @@ function runSearch() {
   };
   if (userOptions.searchTarget === "history" || userOptions.searchTarget === "both") {
     loadHistoryOnce((historyResults) => {
+      if (thisSearchId !== currentSearchId) return;
       const grouped = groupHistoryByUrl(historyResults);
   
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
         chrome.bookmarks.getTree((nodes) => {
+          if (thisSearchId !== currentSearchId) return;
           countBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
           countHistory = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
           countAll = countBookmarks + countHistory;
@@ -370,7 +374,7 @@ function loadHistoryOnce(callback) {
 
   if (isCacheValid) {
     callback(cachedHistory);
-    console.log("キャッシュを使用");
+    console.log("キャッシュを使用", cachedHistory.length, "件 ", historyCacheTimestamp, "ms");
     return;
   }
   let startTime = 0;
