@@ -92,6 +92,31 @@ window.addEventListener("DOMContentLoaded", () => {
     setPopupHeight(200);
   }
 });
+document.addEventListener("keydown", (e) => {
+  // Tabキー押下時（Shiftキー併用で逆方向）
+  if (e.key === "Tab") {
+    const tabButtons = Array.from(document.querySelectorAll('#resultTabs .nav-link'))
+      .filter(btn => btn.offsetParent !== null); // 非表示タブは除外
+
+    if (tabButtons.length === 0) return;
+
+    e.preventDefault();
+
+    const currentIndex = tabButtons.findIndex(btn => btn.classList.contains("active"));
+    let nextIndex;
+
+    if (e.shiftKey) {
+      // Shift+Tab → 前のタブ
+      nextIndex = (currentIndex - 1 + tabButtons.length) % tabButtons.length;
+    } else {
+      // Tab → 次のタブ
+      nextIndex = (currentIndex + 1) % tabButtons.length;
+    }
+
+    const nextTab = tabButtons[nextIndex];
+    nextTab.click(); // 次のタブを選択
+  }
+});
 
 document.querySelectorAll('#resultTabs .nav-link').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -131,8 +156,8 @@ function runSearch() {
   
   // 検索欄が空の場合は件数バッジもリセットして終了
   if (rawQuery === "") {
-    cachedHistory = [];
-    historyCacheTimestamp = 0;
+    // cachedHistory = [];
+    // historyCacheTimestamp = 0;
     ["count-all", "count-bookmarks", "count-history"].forEach(id => {
       const badge = document.getElementById(id);
       badge.textContent = "0";
