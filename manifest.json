@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tadorun - Bookmark & History Search",
-  "version": "2.1",
+  "version": "2.2",
   "description": "Search bookmarks and/or history with AND/OR logic",
   "permissions": [
     "storage",
@@ -20,5 +20,14 @@
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["js/bootstrap.bundle.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
   }
 }

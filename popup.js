@@ -3,7 +3,7 @@ let userOptions = {
   searchTarget: "both",
   highlight: true,
   historyMaxResults: 10000,
-  historyPeriod: 30,
+  historyPeriod: 90,
   minQueryLength: 2,
 };
 let cachedHistory = [];
@@ -25,7 +25,7 @@ chrome.storage.sync.get([
     searchTarget: data.searchTarget || "both",
     highlight: data.highlight !== false,
     historyMaxResults: parseInt(data.historyMaxResults) || 10000,
-    historyPeriod: data.historyPeriod || 30,
+    historyPeriod: data.historyPeriod || 90,
     minQueryLength: parseInt(data.minQueryLength) || 2
   };
   applyTabVisibility(userOptions.searchTarget);
@@ -124,11 +124,25 @@ document.addEventListener("keydown", (e) => {
 document.querySelectorAll('#resultTabs .nav-link').forEach(tab => {
   tab.addEventListener('click', () => {
     setActiveTab(tab.dataset.target);
-
     // 🔧 カーソルブラウジング対策：input にフォーカスを戻す
     const input = document.getElementById("searchInput");
     if (input) input.focus();
   });
+});
+const collapseEl = document.getElementById('filterPanel');
+
+collapseEl.addEventListener('shown.bs.collapse', () => {
+  if (document.getElementById("searchInput").value.trim() === "") {
+    setPopupHeight(200 + 80);
+  }else{
+    setPopupHeight(userOptions.popupHeight + 100);
+  }
+});
+
+collapseEl.addEventListener('hidden.bs.collapse', () => {
+  if (document.getElementById("searchInput").value.trim() === "") {
+    setPopupHeight(200); // ✅ 初期サイズに戻す（空検索時）
+  }
 });
 
 document.getElementById("clearInputBtn").addEventListener("click", () => {
@@ -170,6 +184,7 @@ function runSearch() {
     insertMessageItem(resultsAll, "検索キーワードを入力してください");
     insertMessageItem(resultsBookmarks, "検索キーワードを入力してください");
     insertMessageItem(resultsHistory, "検索キーワードを入力してください");
+    renderDomainFilters({}); // フィルタをクリア
     return;
   }
   if (rawQuery.length < userOptions.minQueryLength) {
@@ -196,22 +211,36 @@ function runSearch() {
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
         chrome.bookmarks.getTree((nodes) => {
           if (thisSearchId !== currentSearchId) return;
-          countBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
-          countHistory = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
+          const matchedBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
+          countBookmarks = matchedBookmarks.length;
+          const matchedHistories =  renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
+          countHistory = matchedHistories.length;
           countAll = countBookmarks + countHistory;
           updateBadgeAndMessages(countAll, countBookmarks, countHistory);
+
+          const allItems = [...matchedBookmarks, ...matchedHistories];
+          const domainMap = getDomainFacets(allItems);
+          renderDomainFilters(domainMap);
         });
       } else {
-        countHistory = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
+        const matchedHistories =  renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
+        countHistory = matchedHistories.length;
         countAll = countHistory;
         updateBadgeAndMessages(countAll, 0, countHistory);
+        const allItems = [...matchedHistories];
+        const domainMap = getDomainFacets(allItems);
+        renderDomainFilters(domainMap);
       }
     });
   } else if (userOptions.searchTarget === "bookmarks") {
     chrome.bookmarks.getTree((nodes) => {
-      countBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
+      const matchedBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
+      countBookmarks = matchedBookmarks.length;
       countAll = countBookmarks;
       updateBadgeAndMessages(countAll, countBookmarks, 0);
+      const allItems = [...matchedBookmarks];
+      const domainMap = getDomainFacets(allItems);
+      renderDomainFilters(domainMap);
     });
   }
 }
@@ -446,9 +475,13 @@ function groupHistoryByUrl(results) {
 }
 function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks) {
   let count = 0;
+  const matched = [];
   const bookmarks = [];
   collectBookmarks(nodes, bookmarks);
+  const allowedDomains = getSelectedDomains();
   for (let b of bookmarks) {
+    const domain = new URL(b.url).hostname;
+    if (allowedDomains.length && !allowedDomains.includes(domain)) continue;
     const text = (b.title + " " + b.url).toLowerCase();
     
     if (matchFn(text)) {
@@ -503,14 +536,19 @@ function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks)
         }
       });
       resultsAll.appendChild(li);
-      count++;
+      matched.push(b);
     }
   }
-  return count;
+  return matched;
 }
 function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
   let count = 0;
+  const matched = [];
+  const allowedDomains = getSelectedDomains();
+
   for (let h of grouped) {
+    const domain = new URL(h.url).hostname;
+    if (allowedDomains.length && !allowedDomains.includes(domain)) continue;
     const text = (h.title + " " + h.url).toLowerCase();
     if (matchFn(text)) {
       const li = document.createElement("li");
@@ -562,11 +600,58 @@ function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
         }
       });
       resultsAll.appendChild(li);
-      count++;
+      matched.push(h);
     }
   }
-  return count;
+  return matched;
 }
+function renderDomainFilters(domainMap) {
+  const container = document.getElementById("domainFilters");
+  container.innerHTML = "";
+
+  const sorted = Object.entries(domainMap).sort((a, b) => b[1] - a[1]);
+
+  // 「すべて」チェックボックス
+  const all = document.createElement("div");
+  all.className = "form-check";
+  all.innerHTML = `
+    <input class="form-check-input" type="checkbox" id="filter-all" checked>
+    <label class="form-check-label" for="filter-all">すべて</label>
+  `;
+  container.appendChild(all);
+
+  // ドメインごとのチェックボックス
+  sorted.forEach(([domain, count]) => {
+    const id = `filter-${domain.replace(/\./g, "_")}`;
+    const div = document.createElement("div");
+    div.className = "form-check";
+    div.innerHTML = `
+      <input class="form-check-input" type="checkbox" id="${id}" data-domain="${domain}" checked>
+      <label class="form-check-label" for="${id}">${domain} (${count})</label>
+    `;
+    container.appendChild(div);
+  });
+
+  // 「すべて」が変化したら全てに反映
+  document.getElementById("filter-all").addEventListener("change", (e) => {
+    const isChecked = e.target.checked;
+    container.querySelectorAll("input[data-domain]").forEach(cb => {
+      cb.checked = isChecked;
+    });
+    runSearch();
+  });
+
+  // 個別チェックが変わったとき「すべて」チェックの状態を調整
+  container.querySelectorAll("input[data-domain]").forEach(checkbox => {
+    checkbox.addEventListener("change", () => {
+      const allChecked = Array.from(container.querySelectorAll("input[data-domain]")).every(cb => cb.checked);
+      document.getElementById("filter-all").checked = allChecked;
+      runSearch();
+    });
+  });
+}
+
+
 function updateBadgeAndMessages(countAll, countBookmarks, countHistory) {
   document.getElementById("count-all").textContent = countAll;
   document.getElementById("count-bookmarks").textContent = countBookmarks;
@@ -581,4 +666,22 @@ function updateBadgeAndMessages(countAll, countBookmarks, countHistory) {
   if (countHistory === 0) {
     insertMessageItem(document.getElementById("results-history"), "一致する結果はありませんでした");
   }
+}
+function getDomainFacets(results) {
+  const countMap = {};
+
+  for (const item of results) {
+    try {
+      const domain = new URL(item.url).hostname;
+      countMap[domain] = (countMap[domain] || 0) + 1;
+    } catch {
+      continue;
+    }
+  }
+
+  return countMap; // 例: { "google.com": 4, "note.com": 2 }
+}
+function getSelectedDomains() {
+  const filters = document.querySelectorAll("#domainFilters input[data-domain]:checked");
+  return Array.from(filters).map(cb => cb.dataset.domain);
 }

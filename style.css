@@ -28,7 +28,14 @@ body {
     background-color: var(--bs-primary);
     color: #fff;
 }
+#domainFilters {
+    max-height: 100px;
+    overflow-y: auto;
+}
 
+#domainFilters .form-check {
+    margin-bottom: 4px;
+}
 #resultsWrapper {
     margin-top: -1px; /* タブ下線と接続させる */
     overflow-y: auto;

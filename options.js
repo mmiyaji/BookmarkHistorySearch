@@ -6,7 +6,7 @@ const DEFAULT_SETTINGS = {
   popupHeight: 600,
   highlight: true,
   historyMaxResults: 10000,
-  historyPeriod: 30,
+  historyPeriod: 90,
   minQueryLength: 2,
 };
 
