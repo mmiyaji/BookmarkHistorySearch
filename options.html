@@ -53,7 +53,12 @@
       <label class="form-label">履歴検索の最大件数</label>
       <input type="number" class="form-control" id="historyMaxResults" min="10" step="100">
     </div>
-    
+    <div class="mb-4">
+      <label class="form-label">検索実行に必要な最小文字数</label>
+      <input type="number" class="form-control" id="minQueryLength" min="1" max="10" />
+      <div class="form-text">短すぎる検索語はヒット件数が多くなるため、2文字以上を推奨します。</div>
+    </div>
+
     <h4>表示設定</h4>
   
     <div class="mb-4">

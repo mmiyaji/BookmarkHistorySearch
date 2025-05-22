@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   highlight: true,
   historyMaxResults: 10000,
   historyPeriod: 30,
+  minQueryLength: 2,
 };
 
 function setFormFields(data) {
@@ -18,6 +19,8 @@ function setFormFields(data) {
   document.getElementById("highlight").checked = data.highlight !== undefined ? data.highlight : DEFAULT_SETTINGS.highlight;
   document.getElementById("historyMaxResults").value = data.historyMaxResults || DEFAULT_SETTINGS.historyMaxResults;
   document.getElementById("historyPeriod").value = data.historyPeriod || DEFAULT_SETTINGS.historyPeriod;
+  document.getElementById("minQueryLength").value = data.minQueryLength || DEFAULT_SETTINGS.minQueryLength;
+  // テーマの適用
   applyTheme(data.theme || DEFAULT_SETTINGS.theme);
 }
 
@@ -44,6 +47,7 @@ document.getElementById("saveBtn").addEventListener("click", () => {
   const highlight = document.getElementById("highlight").checked;
   const historyMaxResults = document.getElementById("historyMaxResults").value;
   const historyPeriod = document.getElementById("historyPeriod").value;
+  const minQueryLength = document.getElementById("minQueryLength").value;
   // 入力値の検証
   if (!["and", "or"].includes(searchMode)) {
     document.getElementById("status").textContent = "検索モードは「and」または「or」のみです。";
@@ -75,7 +79,17 @@ document.getElementById("saveBtn").addEventListener("click", () => {
     return;
   }
   // 保存処理
-  chrome.storage.sync.set({ searchMode, searchTarget, theme, popupWidth, popupHeight, highlight, historyMaxResults, historyPeriod }, () => {
+  chrome.storage.sync.set({ 
+    searchMode, 
+    searchTarget, 
+    theme, 
+    popupWidth, 
+    popupHeight, 
+    highlight, 
+    historyMaxResults, 
+    historyPeriod, 
+    minQueryLength, 
+  }, () => {
     document.getElementById("status").textContent = "保存しました！";
     setTimeout(() => (document.getElementById("status").textContent = ""), 2000);
   });

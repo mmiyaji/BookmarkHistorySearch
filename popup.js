@@ -4,6 +4,7 @@ let userOptions = {
   highlight: true,
   historyMaxResults: 10000,
   historyPeriod: 30,
+  minQueryLength: 2,
 };
 let cachedHistory = [];
 let historyCacheTimestamp = 0; // UNIXタイム（ミリ秒）
@@ -16,14 +17,16 @@ chrome.storage.sync.get([
   "searchTarget",
   "highlight",
   "historyMaxResults",
-  "historyPeriod"
+  "historyPeriod",
+  "minQueryLength"
 ], (data) => {
   userOptions = {
     searchMode: data.searchMode || "and",
     searchTarget: data.searchTarget || "both",
     highlight: data.highlight !== false,
     historyMaxResults: parseInt(data.historyMaxResults) || 10000,
-    historyPeriod: data.historyPeriod || 30
+    historyPeriod: data.historyPeriod || 30,
+    minQueryLength: parseInt(data.minQueryLength) || 2
   };
   applyTabVisibility(userOptions.searchTarget);
   runSearch();
@@ -167,6 +170,10 @@ function runSearch() {
     insertMessageItem(resultsAll, "検索キーワードを入力してください");
     insertMessageItem(resultsBookmarks, "検索キーワードを入力してください");
     insertMessageItem(resultsHistory, "検索キーワードを入力してください");
+    return;
+  }
+  if (rawQuery.length < userOptions.minQueryLength) {
+    insertMessageItem(document.getElementById("results-all"), `検索は ${userOptions.minQueryLength} 文字以上で実行されます`);
     return;
   }
   setPopupHeight(userOptions.popupHeight || 600);
