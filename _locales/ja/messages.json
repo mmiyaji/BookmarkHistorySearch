@@ -1,0 +1,102 @@
+{
+    "extName": {"message": "Tadorun - ブックマーク＆履歴検索"},
+    "extDesc": {"message": "ブックマークや履歴を AND/OR 条件で検索できます"},
+    "actionTitle": {"message": "Tadorun を開く"},
+
+    "ui_searchTitle": {"message": "検索"},
+    "ui_queryPlaceholder": {"message": "キーワードを入力"},
+    "ui_scope_bookmarks": {"message": "ブックマーク"},
+    "ui_scope_history": {"message": "履歴"},
+    "ui_logic_and": {"message": "AND"},
+    "ui_logic_or": {"message": "OR"},
+    "ui_filters": {"message": "フィルター"},
+    "ui_results": {"message": "結果"},
+    "ui_noResults": {"message": "結果はありません"},
+    "ui_openNewTab": {"message": "新しいタブで開く"},
+    "ui_copy": {"message": "コピー"},
+    "ui_options": {"message": "設定"},
+
+    "ui_pageTitle":         { "message": "ブックマーク & 履歴検索" },
+    "ui_appName":           { "message": "Tadorun" },
+    "ui_openOptionsTitle":  { "message": "設定" },
+    "ui_searchPlaceholder": { "message": "検索ワード（スペース区切り）" },
+    "ui_clearTitle":        { "message": "クリア" },
+    "ui_filterTitle":       { "message": "フィルター" },
+    "ui_filterByDomain":    { "message": "ドメインで絞り込み" },
+    "ui_tab_all":           { "message": "すべて" },
+    "ui_tab_bookmarks":     { "message": "ブックマーク" },
+    "ui_tab_history":       { "message": "履歴" },
+
+    "opt_title": {"message": "設定"},
+    "opt_language": {"message": "表示言語(language)"},
+    "opt_language_auto": {"message": "自動（ブラウザに合わせる）"},
+    "opt_language_en": {"message": "英語"},
+    "opt_language_ja": {"message": "日本語"},
+
+    "opt_pageTitle": { "message": "設定" },
+    "opt_header": { "message": "Tadorun - ブックマーク＆履歴検索 設定" },
+
+    "opt_searchSettings": { "message": "検索設定" },
+    "opt_searchMode": { "message": "検索モード" },
+    "opt_searchMode_and": { "message": "AND検索" },
+    "opt_searchMode_or": { "message": "OR検索" },
+
+    "opt_searchTarget": { "message": "検索対象" },
+    "opt_searchTarget_both": { "message": "ブックマーク + 履歴" },
+    "opt_searchTarget_bookmarks": { "message": "ブックマークのみ" },
+    "opt_searchTarget_history": { "message": "履歴のみ" },
+
+    "opt_highlight": { "message": "キーワードのハイライトを有効にする" },
+
+    "opt_historyPeriod": { "message": "履歴検索の対象期間" },
+    "opt_historyPeriod_1": { "message": "過去 1 日" },
+    "opt_historyPeriod_7": { "message": "過去 1 週間" },
+    "opt_historyPeriod_30": { "message": "過去 1 ヶ月" },
+    "opt_historyPeriod_90": { "message": "過去 3 ヶ月" },
+    "opt_historyPeriod_all": { "message": "全期間" },
+    "opt_historyPeriod_note": {
+        "message": "Chrome の履歴は通常「過去 3か月間」まで保存されています。\n検索対象を広げすぎると読み込みに時間がかかる場合があります。"
+    },
+
+    "opt_historyMaxResults": { "message": "履歴検索の最大件数" },
+    "opt_minQueryLength": { "message": "検索実行に必要な最小文字数" },
+    "opt_minQueryLength_note": { "message": "短すぎる検索語はヒット件数が多くなるため、2文字以上を推奨します。" },
+
+    "opt_displaySettings": { "message": "表示設定" },
+    "opt_themeMode": { "message": "カラーモード" },
+    "opt_theme_light": { "message": "ライト" },
+    "opt_theme_dark": { "message": "ダーク" },
+    "opt_theme_auto": { "message": "オート" },
+
+    "opt_windowSize": { "message": "ウィンドウサイズ" },
+    "opt_windowWidth": { "message": "幅 (px)" },
+    "opt_windowHeight": { "message": "高さ (px)" },
+
+    "opt_save": { "message": "設定を保存する" },
+    "opt_reset": { "message": "デフォルトに戻す" },
+    "opt_saved": { "message": "保存しました！" },
+    "opt_reset_done": { "message": "デフォルト値に戻しました！（適用するには「設定を保存する」を押してください）" },
+
+    "opt_err_mode": { "message": "検索モードは「and」または「or」のみです。" },
+    "opt_err_theme": { "message": "テーマは「auto」「light」「dark」のいずれかです。" },
+    "opt_err_target": { "message": "検索対象は「both」「bookmarks」「history」のいずれかです。" },
+    "opt_err_size": { "message": "幅と高さは正の数でなければなりません。" },
+    "opt_err_histmax": { "message": "履歴の最大結果数は正の数でなければなりません。" },
+    "opt_err_minlen": { "message": "最小文字数は1以上にしてください。" },
+    "opt_lang_auto": { "message": "自動（Chromeに合わせる）" },
+    "opt_lang_en": { "message": "英語" },
+    "opt_lang_ja": { "message": "日本語" },
+    "opt_language_note": { "message": "選択した言語がTadorunのUIに適用されます（自動はChromeの言語に追従）。※リロード後に反映されます" },
+
+    "opt_err_lang": { "message": "言語は auto / en / ja のいずれかです。" },
+
+    "ui_enterKeyword":     { "message": "検索キーワードを入力してください" },
+    "ui_minChars":         { "message": "検索は $1 文字以上で実行されます" },
+    "ui_all":              { "message": "すべて" },
+    "ui_visitCount":       { "message": "$1 回表示" },
+    "ui_daysAgo":          { "message": "$1日前" },
+    "ui_hoursAgo":         { "message": "$1時間前" },
+    "ui_minutesAgo":       { "message": "$1分前" },
+    "ui_justNow":          { "message": "たった今" },
+    "ui_usingCache":       { "message": "キャッシュを使用: $1 件 ($2 ms)" }
+}

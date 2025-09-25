@@ -3,91 +3,108 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings</title>
+  <title data-i18n="opt_pageTitle">Settings</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- i18n を options.js より先に読み込む -->
+  <script defer src="js/i18n.js"></script>
+  <script defer src="options.js"></script>
 </head>
 <body>
   <div class="container py-4">
-    <h1 class="text-center mb-4">Tadorun - Bookmark & Search History Settings</h1>
+    <h1 class="text-center mb-4" data-i18n="opt_header">Tadorun - Bookmark &amp; Search History Settings</h1>
     
-    <h4>検索設定</h4>
+    <h4 data-i18n="opt_searchSettings">検索設定</h4>
 
     <div class="mb-4">
-      <label class="form-label">検索モード</label>
+      <label class="form-label" data-i18n="opt_searchMode">検索モード</label>
       <select id="searchMode" class="form-select">
-        <option value="and">AND検索</option>
-        <option value="or">OR検索</option>
+        <option value="and" data-i18n="opt_searchMode_and">AND検索</option>
+        <option value="or" data-i18n="opt_searchMode_or">OR検索</option>
       </select>
     </div>
   
     <div class="mb-4">
-      <label class="form-label">検索対象</label>
+      <label class="form-label" data-i18n="opt_searchTarget">検索対象</label>
       <select id="searchTarget" class="form-select">
-        <option value="both">ブックマーク + 履歴</option>
-        <option value="bookmarks">ブックマークのみ</option>
-        <option value="history">履歴のみ</option>
+        <option value="both" data-i18n="opt_searchTarget_both">ブックマーク + 履歴</option>
+        <option value="bookmarks" data-i18n="opt_searchTarget_bookmarks">ブックマークのみ</option>
+        <option value="history" data-i18n="opt_searchTarget_history">履歴のみ</option>
       </select>
     </div>
 
     <div class="form-check form-switch mb-3">
       <input class="form-check-input" type="checkbox" id="highlight">
-      <label class="form-check-label" for="highlight">キーワードのハイライトを有効にする</label>
+      <label class="form-check-label" for="highlight" data-i18n="opt_highlight">キーワードのハイライトを有効にする</label>
     </div>
     
     <div class="mb-4">
-      <label class="form-label">履歴検索の対象期間</label>
+      <label class="form-label" data-i18n="opt_historyPeriod">履歴検索の対象期間</label>
       <select id="historyPeriod" class="form-select">
-        <option value="1">過去 1 日</option>
-        <option value="7">過去 1 週間</option>
-        <option value="30">過去 1 ヶ月</option>
-        <option value="90">過去 3 ヶ月</option>
-        <option value="all">全期間</option>
+        <option value="1" data-i18n="opt_historyPeriod_1">過去 1 日</option>
+        <option value="7" data-i18n="opt_historyPeriod_7">過去 1 週間</option>
+        <option value="30" data-i18n="opt_historyPeriod_30">過去 1 ヶ月</option>
+        <option value="90" data-i18n="opt_historyPeriod_90">過去 3 ヶ月</option>
+        <option value="all" data-i18n="opt_historyPeriod_all">全期間</option>
       </select>
-      <div class="form-text">
+      <div class="form-text" data-i18n="opt_historyPeriod_note">
         ※ Chrome の履歴は通常「過去 3か月間」まで保存されています。<br>
         検索対象を広げすぎると読み込みに時間がかかる場合があります。
       </div>
     </div>
 
     <div class="mb-4">
-      <label class="form-label">履歴検索の最大件数</label>
+      <label class="form-label" data-i18n="opt_historyMaxResults">履歴検索の最大件数</label>
       <input type="number" class="form-control" id="historyMaxResults" min="10" step="100">
     </div>
+
     <div class="mb-4">
-      <label class="form-label">検索実行に必要な最小文字数</label>
+      <label class="form-label" data-i18n="opt_minQueryLength">検索実行に必要な最小文字数</label>
       <input type="number" class="form-control" id="minQueryLength" min="1" max="10" />
-      <div class="form-text">短すぎる検索語はヒット件数が多くなるため、2文字以上を推奨します。</div>
+      <div class="form-text" data-i18n="opt_minQueryLength_note">
+        短すぎる検索語はヒット件数が多くなるため、2文字以上を推奨します。
+      </div>
     </div>
 
-    <h4>表示設定</h4>
+    <h4 data-i18n="opt_displaySettings">表示設定</h4>
   
     <div class="mb-4">
-      <label class="form-label">カラーモード</label>
+      <label class="form-label" data-i18n="opt_themeMode">カラーモード</label>
       <select id="themeMode" class="form-select">
-        <option value="light">ライト</option>
-        <option value="dark">ダーク</option>
-        <option value="auto">オート</option>
+        <option value="light" data-i18n="opt_theme_light">ライト</option>
+        <option value="dark" data-i18n="opt_theme_dark">ダーク</option>
+        <option value="auto" data-i18n="opt_theme_auto">オート</option>
       </select>
     </div>
+
     <div class="mb-4">
-      <label class="form-label">ウィンドウサイズ</label>
+      <label class="form-label" data-i18n="opt_language">表示言語</label>
+      <select id="language" class="form-select">
+        <option value="auto" data-i18n="opt_lang_auto">自動（ブラウザに合わせる）</option>
+        <option value="en" data-i18n="opt_lang_en">English</option>
+        <option value="ja" data-i18n="opt_lang_ja">日本語</option>
+      </select>
+      <div class="form-text" data-i18n="opt_language_note">
+        ここで選んだ言語がTadorunのUIに適用されます（自動はChromeの言語に追従）。
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label" data-i18n="opt_windowSize">ウィンドウサイズ</label>
       <div class="col">
-        <label class="form-label">幅 (px)</label>
+        <label class="form-label" data-i18n="opt_windowWidth">幅 (px)</label>
         <input type="number" id="popupWidth" class="form-control" min="200" max="800">
       </div>
       <div class="col">
-        <label class="form-label">高さ (px)</label>
+        <label class="form-label" data-i18n="opt_windowHeight">高さ (px)</label>
         <input type="number" id="popupHeight" class="form-control" min="200" max="1000">
       </div>
     </div>
   
     <hr>
-    <button id="saveBtn" class="btn btn-primary">設定を保存する</button>
-    <button id="resetBtn" class="btn btn-secondary">デフォルトに戻す</button>
+    <button id="saveBtn" class="btn btn-primary" data-i18n="opt_save">設定を保存する</button>
+    <button id="resetBtn" class="btn btn-secondary" data-i18n="opt_reset">デフォルトに戻す</button>
     <div id="status" class="text-success mt-2"></div>
-  
-    <!-- スクリプト -->
-    <script src="options.js"></script>
   </div>
 </body>
 </html>

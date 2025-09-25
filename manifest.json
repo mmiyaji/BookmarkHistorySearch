@@ -1,21 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "Tadorun - Bookmark & History Search",
-  "version": "2.3",
-  "description": "Search bookmarks and/or history with AND/OR logic",
+  "name": "__MSG_extName__",
+  "description": "__MSG_extDesc__",
+  "version": "2.4.0",
+  "default_locale": "en",
+
   "permissions": ["storage", "bookmarks", "history"],
 
   "icons": {
     "16": "images/icon-16.png",
     "32": "images/icon-32.png",
     "48": "images/icon-48.png",
-    "128": "images/icon-128.png",
-    "256": "images/icon-256.png",
-    "512": "images/icon-512.png"
+    "128": "images/icon-128.png"
   },
 
   "action": {
-    "default_title": "Tadorun",
+    "default_title": "__MSG_actionTitle__",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "images/icon-16.png",
@@ -31,7 +31,11 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["js/bootstrap.bundle.min.js"],
+      "resources": [
+        "js/bootstrap.bundle.min.js",
+        "_locales/en/messages.json",
+        "_locales/ja/messages.json"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
