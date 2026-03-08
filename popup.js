@@ -361,9 +361,32 @@ function isSafeUrl(url) {
   } catch { return false; }
 }
 
-// Chrome内蔵ファビコンキャッシュを使用（外部送信なし・ローカルサイト対応）
-function getFaviconUrl(url) {
-  return chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(url)}&size=16`);
+// フォールバック用プレースホルダー（グレーの小さいSVG）
+const FAVICON_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%23ccc'/%3E%3C/svg%3E";
+
+// ① Chrome内蔵キャッシュ → ② サイト自身の /favicon.ico → ③ SVGプレースホルダー
+function applyFavicon(imgEl, url) {
+  imgEl.width = 16;
+  imgEl.height = 16;
+
+  // ① Chrome内蔵ファビコンキャッシュ（訪問済みサイト・ローカルサイトに有効）
+  imgEl.src = chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(url)}&size=16`);
+
+  imgEl.onerror = function() {
+    // ② サイト自身の favicon.ico を試す（ローカルサイト未訪問でも取得可能）
+    try {
+      const origin = new URL(url).origin;
+      this.src = origin + '/favicon.ico';
+      this.onerror = function() {
+        // ③ 最終フォールバック：SVGプレースホルダー
+        this.src = FAVICON_PLACEHOLDER;
+        this.onerror = null;
+      };
+    } catch {
+      this.src = FAVICON_PLACEHOLDER;
+      this.onerror = null;
+    }
+  };
 }
 
 function runSearch() {
@@ -549,8 +572,8 @@ function createBookmarkLi(b, keywords) {
 
   // Favicon
   const favicon = document.createElement("img");
-  favicon.src = getFaviconUrl(url);
   favicon.className = "me-1";
+  applyFavicon(favicon, url);
   li.appendChild(favicon);
 
   // Folder badge
@@ -695,8 +718,8 @@ function createHistoryLi(h, keywords) {
 
   // Favicon
   const favicon = document.createElement("img");
-  favicon.src = getFaviconUrl(url);
   favicon.className = "me-1";
+  applyFavicon(favicon, url);
   li.appendChild(favicon);
 
   // Elapsed time badge
