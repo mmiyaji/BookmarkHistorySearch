@@ -12,7 +12,10 @@ const DEFAULT_SETTINGS = {
   historyMaxResults: 10000,
   historyPeriod: 90,
   minQueryLength: 2,
-  langOverride: "auto" // "auto" | "en" | "ja"
+  langOverride: "auto", // "auto" | "en" | "ja"
+  sortOrder: "default",
+  displayLimit: 50,
+  enableRecentSearches: true
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -57,6 +60,9 @@ function setFormFields(data) {
   document.getElementById("historyPeriod").value = data.historyPeriod;
   document.getElementById("minQueryLength").value = data.minQueryLength;
   document.getElementById("language").value = data.langOverride || "auto";
+  document.getElementById("sortOrder").value = data.sortOrder || "default";
+  document.getElementById("displayLimit").value = data.displayLimit || 50;
+  document.getElementById("enableRecentSearches").checked = data.enableRecentSearches !== false;
   applyTheme(data.theme);
 }
 
@@ -72,8 +78,11 @@ function onSave() {
   const historyPeriod = document.getElementById("historyPeriod").value;
   const minQueryLength = Number(document.getElementById("minQueryLength").value);
   const langOverride = document.getElementById("language").value; // "auto"|"en"|"ja"
+  const sortOrder = document.getElementById("sortOrder").value;
+  const displayLimit = Number(document.getElementById("displayLimit").value);
+  const enableRecentSearches = document.getElementById("enableRecentSearches").checked;
 
-  if (!["and","or"].includes(searchMode)) return flashStatus(t("opt_err_mode"), true);
+  if (!["and","or","regex"].includes(searchMode)) return flashStatus(t("opt_err_mode"), true);
   if (!["auto","light","dark"].includes(theme)) return flashStatus(t("opt_err_theme"), true);
   if (!["both","bookmarks","history"].includes(searchTarget)) return flashStatus(t("opt_err_target"), true);
   if (!Number.isFinite(popupWidth) || popupWidth <= 0 || !Number.isFinite(popupHeight) || popupHeight <= 0)
@@ -89,7 +98,7 @@ function onSave() {
     searchMode, searchTarget, theme,
     popupWidth, popupHeight, highlight, groupSameTitle,
     historyMaxResults, historyPeriod, minQueryLength,
-    langOverride
+    langOverride, sortOrder, displayLimit, enableRecentSearches
   }, () => {
     // 他ページへ通知（受信側が居なくてもエラーにしない）
     safeSendMessage({ type: "langChanged" });

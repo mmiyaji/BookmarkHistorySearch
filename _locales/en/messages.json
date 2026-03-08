@@ -19,10 +19,11 @@
     "ui_pageTitle":         { "message": "Bookmark & History Search" },
     "ui_appName":           { "message": "Tadorun" },
     "ui_openOptionsTitle":  { "message": "Settings" },
-    "ui_searchPlaceholder": { "message": "Search words (space-separated)" },
+    "ui_searchPlaceholder": { "message": "Search words (space-separated, -word to exclude)" },
     "ui_clearTitle":        { "message": "Clear" },
     "ui_filterTitle":       { "message": "Filter" },
     "ui_filterByDomain":    { "message": "Filter by domain" },
+    "ui_filterByFolder":    { "message": "Filter by folder" },
     "ui_tab_all":           { "message": "All" },
     "ui_tab_bookmarks":     { "message": "Bookmarks" },
     "ui_tab_history":       { "message": "History" },
@@ -40,6 +41,7 @@
     "opt_searchMode": { "message": "Search mode" },
     "opt_searchMode_and": { "message": "AND search" },
     "opt_searchMode_or": { "message": "OR search" },
+    "opt_searchMode_regex": { "message": "Regex search" },
 
     "opt_searchTarget": { "message": "Search target" },
     "opt_searchTarget_both": { "message": "Bookmarks + History" },
@@ -62,6 +64,17 @@
     "opt_minQueryLength": { "message": "Minimum query length to run search" },
     "opt_minQueryLength_note": { "message": "Very short queries can match too many items; 2+ characters are recommended." },
 
+    "opt_sortOrder": { "message": "Sort order" },
+    "opt_sortOrder_default": { "message": "Default" },
+    "opt_sortOrder_visitCount": { "message": "Visit count" },
+    "opt_sortOrder_lastVisit": { "message": "Last visited" },
+    "opt_sortOrder_title": { "message": "Title" },
+
+    "opt_displayLimit": { "message": "Items per page" },
+    "opt_displayLimit_note": { "message": "Use 'Load more' button to show additional results." },
+
+    "opt_enableRecentSearches": { "message": "Save recent searches" },
+
     "opt_displaySettings": { "message": "Display Settings" },
     "opt_themeMode": { "message": "Color mode" },
     "opt_theme_light": { "message": "Light" },
@@ -77,7 +90,7 @@
     "opt_saved": { "message": "Saved!" },
     "opt_reset_done": { "message": "Defaults restored! (Press 'Save settings' to apply)" },
 
-    "opt_err_mode": { "message": "Search mode must be 'and' or 'or'." },
+    "opt_err_mode": { "message": "Search mode must be 'and', 'or', or 'regex'." },
     "opt_err_theme": { "message": "Theme must be one of 'auto', 'light', or 'dark'." },
     "opt_err_target": { "message": "Target must be one of 'both', 'bookmarks', or 'history'." },
     "opt_err_size": { "message": "Width and height must be positive numbers." },
@@ -100,5 +113,25 @@
     "ui_usingCache":       { "message": "Using cache: $1 items ($2 ms)" },
 
     "opt_groupSameTitle":      { "message": "Group same-title pages with different query strings" },
-    "opt_groupSameTitle_note": { "message": "Merges history entries that share the same hostname, path, and title but differ only in query string. Visit counts are summed." }
+    "opt_groupSameTitle_note": { "message": "Merges history entries that share the same hostname, path, and title but differ only in query string. Visit counts are summed." },
+
+    "ui_sortOrder":        { "message": "Sort:" },
+    "ui_sortDefault":      { "message": "Default" },
+    "ui_sortVisitCount":   { "message": "Visits" },
+    "ui_sortLastVisit":    { "message": "Last visit" },
+    "ui_sortTitle":        { "message": "Title" },
+
+    "ui_loadMore":         { "message": "Load more ($1 items)" },
+    "ui_copyUrl":          { "message": "Copy URL" },
+    "ui_copied":           { "message": "Copied!" },
+    "ui_openTab":          { "message": "Open" },
+    "ui_recentSearches":   { "message": "Recent searches" },
+    "ui_regexError":       { "message": "Regex error: $1" },
+    "ui_editBookmark":     { "message": "Edit bookmark" },
+    "ui_deleteBookmark":   { "message": "Delete bookmark" },
+    "ui_confirmDelete":    { "message": "Delete \"$1\"?" },
+    "ui_editTitle":        { "message": "Title" },
+    "ui_editUrl":          { "message": "URL" },
+    "ui_editSave":         { "message": "Save" },
+    "ui_editCancel":       { "message": "Cancel" }
 }

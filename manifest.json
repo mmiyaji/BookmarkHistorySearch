@@ -2,10 +2,17 @@
   "manifest_version": 3,
   "name": "__MSG_extName__",
   "description": "__MSG_extDesc__",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "default_locale": "en",
 
-  "permissions": ["storage", "bookmarks", "history"],
+  "permissions": ["storage", "bookmarks", "history", "tabs"],
+
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+O" },
+      "description": "Open Tadorun"
+    }
+  },
 
   "icons": {
     "16": "images/icon-16.png",
