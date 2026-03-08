@@ -262,34 +262,41 @@ function runSearch() {
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
         chrome.bookmarks.getTree((nodes) => {
           if (thisSearchId !== currentSearchId) return;
-          const matchedBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
-          countBookmarks = matchedBookmarks.length;
 
-          const matchedHistories = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
-          countHistory = matchedHistories.length;
+          // 1) ドメインフィルターを無視してテキストマッチのみで収集
+          const allBookmarks = collectBookmarkMatches(nodes, matchFn);
+          const allHistories = collectHistoryMatches(grouped, matchFn);
 
+          // 2) 全マッチからドメインチェックボックスを生成（フィルター前なので消えない）
+          renderDomainFilters(getDomainFacets([...allBookmarks, ...allHistories]));
+
+          // 3) ドメインフィルターを適用してDOMに描画
+          const displayedBookmarks = renderBookmarkItems(allBookmarks, keywords, resultsAll, resultsBookmarks);
+          const displayedHistories = renderHistoryItems(allHistories, keywords, resultsAll, resultsHistory);
+
+          countBookmarks = displayedBookmarks.length;
+          countHistory   = displayedHistories.length;
           countAll = countBookmarks + countHistory;
           updateBadgeAndMessages(countAll, countBookmarks, countHistory);
-
-          const allItems = [...matchedBookmarks, ...matchedHistories];
-          renderDomainFilters(getDomainFacets(allItems));
         });
       } else {
         // history only
-        const matchedHistories = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
-        countHistory = matchedHistories.length;
+        const allHistories = collectHistoryMatches(grouped, matchFn);
+        renderDomainFilters(getDomainFacets(allHistories));
+        const displayedHistories = renderHistoryItems(allHistories, keywords, resultsAll, resultsHistory);
+        countHistory = displayedHistories.length;
         countAll = countHistory;
         updateBadgeAndMessages(countAll, 0, countHistory);
-        renderDomainFilters(getDomainFacets(matchedHistories));
       }
     });
   } else if (userOptions.searchTarget === "bookmarks") {
     chrome.bookmarks.getTree((nodes) => {
-      const matchedBookmarks = renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks);
-      countBookmarks = matchedBookmarks.length;
+      const allBookmarks = collectBookmarkMatches(nodes, matchFn);
+      renderDomainFilters(getDomainFacets(allBookmarks));
+      const displayedBookmarks = renderBookmarkItems(allBookmarks, keywords, resultsAll, resultsBookmarks);
+      countBookmarks = displayedBookmarks.length;
       countAll = countBookmarks;
       updateBadgeAndMessages(countAll, countBookmarks, 0);
-      renderDomainFilters(getDomainFacets(matchedBookmarks));
     });
   }
 }
@@ -305,24 +312,33 @@ function collectBookmarks(nodes, result, path = []) {
   }
 }
 
-function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks) {
-  const matched = [];
-  const bookmarks = [];
-  collectBookmarks(nodes, bookmarks);
+// テキストマッチのみ（ドメインフィルターなし）でブックマークを収集
+function collectBookmarkMatches(nodes, matchFn) {
+  const all = [];
+  collectBookmarks(nodes, all);
+  return all.filter(b => {
+    if (!isSafeUrl(b.url)) return false;
+    return matchFn((b.title + " " + b.url).toLowerCase());
+  });
+}
+
+// テキストマッチのみ（ドメインフィルターなし）で履歴を収集
+function collectHistoryMatches(grouped, matchFn) {
+  return grouped.filter(h => {
+    if (!isSafeUrl(h.url)) return false;
+    return matchFn((h.title + " " + h.url).toLowerCase());
+  });
+}
+
+// ドメインフィルターを適用してブックマークをDOMに描画
+function renderBookmarkItems(matched, keywords, resultsAll, resultsBookmarks) {
   const allowedDomains = getSelectedDomains();
+  const displayed = [];
 
-  for (const b of bookmarks) {
-    if (!isSafeUrl(b.url)) continue; // javascript: などの危険URLを除外
-
+  for (const b of matched) {
     let domain;
-    try {
-      domain = new URL(b.url).hostname;
-    } catch { continue; }
-
+    try { domain = new URL(b.url).hostname; } catch { continue; }
     if (allowedDomains.length && !allowedDomains.includes(domain)) continue;
-
-    const text = (b.title + " " + b.url).toLowerCase();
-    if (!matchFn(text)) continue;
 
     const li = document.createElement("li");
     li.className = "list-group-item";
@@ -369,27 +385,20 @@ function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks)
     });
     resultsAll.appendChild(li);
 
-    matched.push(b);
+    displayed.push(b);
   }
-  return matched;
+  return displayed;
 }
 
-function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
-  const matched = [];
+// ドメインフィルターを適用して履歴をDOMに描画
+function renderHistoryItems(matched, keywords, resultsAll, resultsHistory) {
   const allowedDomains = getSelectedDomains();
+  const displayed = [];
 
-  for (const h of grouped) {
-    if (!isSafeUrl(h.url)) continue; // javascript: などの危険URLを除外
-
+  for (const h of matched) {
     let domain;
-    try {
-      domain = new URL(h.url).hostname;
-    } catch { continue; }
-
+    try { domain = new URL(h.url).hostname; } catch { continue; }
     if (allowedDomains.length && !allowedDomains.includes(domain)) continue;
-
-    const text = (h.title + " " + h.url).toLowerCase();
-    if (!matchFn(text)) continue;
 
     const li = document.createElement("li");
     li.className = "list-group-item";
@@ -428,16 +437,16 @@ function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
 
     li.addEventListener("click", (e) => {
       if (e.target.tagName.toLowerCase() === "a") return;
-      document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected")); // 修正: #results → #resultsWrapper
+      document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
       li.classList.add("selected");
       const link = li.querySelector("a");
       if (link) window.open(link.href, "_blank");
     });
     resultsAll.appendChild(li);
 
-    matched.push(h);
+    displayed.push(h);
   }
-  return matched;
+  return displayed;
 }
 
 // --- 補助 --------------------------------------------------------------------
