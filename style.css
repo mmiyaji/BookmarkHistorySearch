@@ -280,9 +280,10 @@ html[data-bs-theme="dark"] .bookmark-edit-form {
 /* --- Sort order select in toolbar --- */
 #sortOrderSelect {
     font-size: 0.8rem;
-    padding: 2px 6px;
+    padding: 2px 24px 2px 6px; /* 右側はドロップダウン矢印のスペース */
     height: auto;
-    max-width: 110px;
+    width: auto;
+    min-width: 0;
 }
 
 /* --- Load more button --- */
