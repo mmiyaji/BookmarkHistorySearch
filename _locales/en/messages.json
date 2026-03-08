@@ -97,5 +97,8 @@
     "ui_hoursAgo":         { "message": "$1 hours ago" },
     "ui_minutesAgo":       { "message": "$1 minutes ago" },
     "ui_justNow":          { "message": "just now" },
-    "ui_usingCache":       { "message": "Using cache: $1 items ($2 ms)" }
+    "ui_usingCache":       { "message": "Using cache: $1 items ($2 ms)" },
+
+    "opt_groupSameTitle":      { "message": "Group same-title pages with different query strings" },
+    "opt_groupSameTitle_note": { "message": "Merges history entries that share the same hostname, path, and title but differ only in query string. Visit counts are summed." }
 }

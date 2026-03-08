@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   popupWidth: 350,
   popupHeight: 600,
   highlight: true,
+  groupSameTitle: true,
   historyMaxResults: 10000,
   historyPeriod: 90,
   minQueryLength: 2,
@@ -51,6 +52,7 @@ function setFormFields(data) {
   document.getElementById("popupWidth").value = data.popupWidth;
   document.getElementById("popupHeight").value = data.popupHeight;
   document.getElementById("highlight").checked = data.highlight;
+  document.getElementById("groupSameTitle").checked = data.groupSameTitle;
   document.getElementById("historyMaxResults").value = data.historyMaxResults;
   document.getElementById("historyPeriod").value = data.historyPeriod;
   document.getElementById("minQueryLength").value = data.minQueryLength;
@@ -65,6 +67,7 @@ function onSave() {
   const popupWidth = Number(document.getElementById("popupWidth").value);
   const popupHeight = Number(document.getElementById("popupHeight").value);
   const highlight = document.getElementById("highlight").checked;
+  const groupSameTitle = document.getElementById("groupSameTitle").checked;
   const historyMaxResults = Number(document.getElementById("historyMaxResults").value);
   const historyPeriod = document.getElementById("historyPeriod").value;
   const minQueryLength = Number(document.getElementById("minQueryLength").value);
@@ -84,7 +87,7 @@ function onSave() {
 
   chrome.storage.sync.set({
     searchMode, searchTarget, theme,
-    popupWidth, popupHeight, highlight,
+    popupWidth, popupHeight, highlight, groupSameTitle,
     historyMaxResults, historyPeriod, minQueryLength,
     langOverride
   }, () => {

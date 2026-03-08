@@ -21,6 +21,7 @@ let userOptions = {
   searchMode: "and",
   searchTarget: "both",
   highlight: true,
+  groupSameTitle: true,
   historyMaxResults: 10000,
   historyPeriod: 90,
   minQueryLength: 2,
@@ -52,12 +53,13 @@ async function bootstrap() {
 
   // 2) 設定ロード → UI 反映
   chrome.storage.sync.get(
-    ["searchMode","searchTarget","highlight","historyMaxResults","historyPeriod","minQueryLength","popupHeight","popupWidth"],
+    ["searchMode","searchTarget","highlight","groupSameTitle","historyMaxResults","historyPeriod","minQueryLength","popupHeight","popupWidth"],
     (data) => {
       userOptions = {
         searchMode: data.searchMode || "and",
         searchTarget: data.searchTarget || "both",
         highlight: data.highlight !== false,
+        groupSameTitle: data.groupSameTitle !== false, // デフォルト: true
         historyMaxResults: parseInt(data.historyMaxResults) || 10000,
         historyPeriod: data.historyPeriod || 90,
         minQueryLength: parseInt(data.minQueryLength) || 2,
@@ -254,7 +256,8 @@ function runSearch() {
     loadHistoryOnce((historyResults) => {
       if (thisSearchId !== currentSearchId) return;
 
-      const grouped = groupHistoryByUrl(historyResults);
+      let grouped = groupHistoryByUrl(historyResults);
+      if (userOptions.groupSameTitle) grouped = mergeSameTitleHistory(grouped);
 
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
         chrome.bookmarks.getTree((nodes) => {
@@ -272,6 +275,7 @@ function runSearch() {
           renderDomainFilters(getDomainFacets(allItems));
         });
       } else {
+        // history only
         const matchedHistories = renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory);
         countHistory = matchedHistories.length;
         countAll = countHistory;
@@ -497,6 +501,34 @@ function groupHistoryByUrl(results) {
     historyVisitMap[url] = (historyVisitMap[url] || 0) + item.visitCount;
   }
   return Object.values(grouped);
+}
+
+// タイトルとベースURL（クエリストリング除去）が同じ履歴をひとつにまとめる
+function mergeSameTitleHistory(grouped) {
+  const mergeMap = new Map();
+  for (const item of grouped) {
+    let baseKey;
+    try {
+      const u = new URL(item.url);
+      // グループキー: タイトル + プロトコル + ホスト名 + パス（クエリ・フラグメントを除く）
+      baseKey = (item.title || "") + "\0" + u.protocol + "//" + u.hostname + u.pathname;
+    } catch {
+      baseKey = (item.title || "") + "\0" + item.url;
+    }
+
+    const existing = mergeMap.get(baseKey);
+    if (!existing) {
+      mergeMap.set(baseKey, { ...item });
+    } else {
+      existing.visitCount += item.visitCount;
+      // より新しい訪問時刻のURLを代表として使用
+      if (item.lastVisitTime > existing.lastVisitTime) {
+        existing.lastVisitTime = item.lastVisitTime;
+        existing.url = item.url;
+      }
+    }
+  }
+  return Array.from(mergeMap.values());
 }
 
 function normalizeForSearch(str) {

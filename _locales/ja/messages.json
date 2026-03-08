@@ -98,5 +98,8 @@
     "ui_hoursAgo":         { "message": "$1時間前" },
     "ui_minutesAgo":       { "message": "$1分前" },
     "ui_justNow":          { "message": "たった今" },
-    "ui_usingCache":       { "message": "キャッシュを使用: $1 件 ($2 ms)" }
+    "ui_usingCache":       { "message": "キャッシュを使用: $1 件 ($2 ms)" },
+
+    "opt_groupSameTitle":      { "message": "クエリストリングが異なる同タイトルページをまとめる" },
+    "opt_groupSameTitle_note": { "message": "ホスト名・パスが同じでクエリストリングのみ異なり、タイトルも同じ履歴をひとつにまとめます。表示件数はアクセス数の合計になります。" }
 }
