@@ -33,6 +33,9 @@
     {
       "resources": [
         "js/bootstrap.bundle.min.js",
+        "css/bootstrap.min.css",
+        "css/fontawesome.all.min.css",
+        "css/webfonts/*.woff2",
         "_locales/en/messages.json",
         "_locales/ja/messages.json"
       ],

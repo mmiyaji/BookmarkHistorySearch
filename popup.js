@@ -24,7 +24,8 @@ let userOptions = {
   historyMaxResults: 10000,
   historyPeriod: 90,
   minQueryLength: 2,
-  popupHeight: 600
+  popupHeight: 600,
+  popupWidth: 350
 };
 
 let cachedHistory = [];
@@ -51,7 +52,7 @@ async function bootstrap() {
 
   // 2) 設定ロード → UI 反映
   chrome.storage.sync.get(
-    ["searchMode","searchTarget","highlight","historyMaxResults","historyPeriod","minQueryLength","popupHeight"],
+    ["searchMode","searchTarget","highlight","historyMaxResults","historyPeriod","minQueryLength","popupHeight","popupWidth"],
     (data) => {
       userOptions = {
         searchMode: data.searchMode || "and",
@@ -60,12 +61,16 @@ async function bootstrap() {
         historyMaxResults: parseInt(data.historyMaxResults) || 10000,
         historyPeriod: data.historyPeriod || 90,
         minQueryLength: parseInt(data.minQueryLength) || 2,
-        popupHeight: parseInt(data.popupHeight) || 600
+        popupHeight: parseInt(data.popupHeight) || 600,
+        popupWidth: parseInt(data.popupWidth) || 350
       };
+
+      // ウィンドウサイズ適用
+      document.documentElement.style.width = `${userOptions.popupWidth}px`;
 
       applyTabVisibility(userOptions.searchTarget);
 
-      // 検索欄の placeholder を i18n で上書き（HTMLに data-i18n-attr がある場合はそちらが適用済み）
+      // 検索欄の placeholder を i18n で上書き
       const input = document.getElementById("searchInput");
       if (input) {
         input.setAttribute("placeholder", t("ui_searchPlaceholder", input.getAttribute("placeholder")));
@@ -73,7 +78,7 @@ async function bootstrap() {
         if (input.value.trim() === "") setPopupHeight(200);
       }
 
-      // 3) ハンドラ登録（ここから）
+      // 3) ハンドラ登録
       wireEvents();
 
       // 4) 履歴プリロード & 初回検索
@@ -90,7 +95,8 @@ function wireEvents() {
   });
 
   const input = document.getElementById("searchInput");
-  input?.addEventListener("input", runSearch);
+  // デバウンス付きで検索（キーストロークごとに重い処理を走らせない）
+  input?.addEventListener("input", debounce(runSearch, 150));
 
   input?.addEventListener("keydown", (e) => {
     const tabId = getActiveTabId();
@@ -164,8 +170,33 @@ function wireEvents() {
     const input2 = document.getElementById("searchInput");
     input2.value = "";
     input2.focus();
-    runSearch(); // 空文字で検索を再実行（結果クリア）
+    runSearch();
   });
+}
+
+// --- ユーティリティ ----------------------------------------------------------
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function isSafeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch { return false; }
 }
 
 // --- 検索コア ----------------------------------------------------------------
@@ -277,7 +308,13 @@ function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks)
   const allowedDomains = getSelectedDomains();
 
   for (const b of bookmarks) {
-    const domain = new URL(b.url).hostname;
+    if (!isSafeUrl(b.url)) continue; // javascript: などの危険URLを除外
+
+    let domain;
+    try {
+      domain = new URL(b.url).hostname;
+    } catch { continue; }
+
     if (allowedDomains.length && !allowedDomains.includes(domain)) continue;
 
     const text = (b.title + " " + b.url).toLowerCase();
@@ -287,7 +324,7 @@ function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks)
     li.className = "list-group-item";
 
     const folderLabel = b.folderPath && b.folderPath.length
-      ? `<span class="badge bg-secondary me-1">📁 ${b.folderPath.join(" / ")}</span>`
+      ? `<span class="badge bg-secondary me-1">📁 ${escapeHtml(b.folderPath.join(" / "))}</span>`
       : "";
 
     const visitCount = historyVisitMap[b.url] || 0;
@@ -304,7 +341,7 @@ function renderBookmarks(nodes, keywords, matchFn, resultsAll, resultsBookmarks)
       ${favicon}
       ${folderLabel}
       ${historyBadge}
-      <a href="${b.url}" target="_blank">${displayTitle}</a>
+      <a href="${escapeHtml(b.url)}" target="_blank">${displayTitle}</a>
       <div class="url-text text-muted small ms-4">${displayURL}</div>
     `;
     li.title = b.url;
@@ -338,7 +375,13 @@ function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
   const allowedDomains = getSelectedDomains();
 
   for (const h of grouped) {
-    const domain = new URL(h.url).hostname;
+    if (!isSafeUrl(h.url)) continue; // javascript: などの危険URLを除外
+
+    let domain;
+    try {
+      domain = new URL(h.url).hostname;
+    } catch { continue; }
+
     if (allowedDomains.length && !allowedDomains.includes(domain)) continue;
 
     const text = (h.title + " " + h.url).toLowerCase();
@@ -364,8 +407,8 @@ function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
       ${favicon}
       ${elapsedTag}
       ${countBadge}
-      <a href="${h.url}" target="_blank">${displayTitle}</a>
-      <div class="url-text text-muted small ms-4" title="${h.url}">${displayURL}</div>
+      <a href="${escapeHtml(h.url)}" target="_blank">${displayTitle}</a>
+      <div class="url-text text-muted small ms-4" title="${escapeHtml(h.url)}">${displayURL}</div>
     `;
     li.title = h.url;
 
@@ -381,7 +424,7 @@ function renderHistory(grouped, keywords, matchFn, resultsAll, resultsHistory) {
 
     li.addEventListener("click", (e) => {
       if (e.target.tagName.toLowerCase() === "a") return;
-      document.querySelectorAll("#results li").forEach(el => el.classList.remove("selected"));
+      document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected")); // 修正: #results → #resultsWrapper
       li.classList.add("selected");
       const link = li.querySelector("a");
       if (link) window.open(link.href, "_blank");
@@ -403,7 +446,8 @@ function preloadHistory() {
   chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
     cachedHistory = results;
     historyCacheTimestamp = now;
-    groupHistoryByUrl(results);
+    // historyVisitMap を構築（サイドエフェクトのみ利用）
+    buildHistoryVisitMap(results);
   });
 }
 
@@ -428,15 +472,27 @@ function loadHistoryOnce(callback) {
   });
 }
 
+// historyVisitMap だけを構築する（プリロード用）
+function buildHistoryVisitMap(results) {
+  historyVisitMap = {};
+  for (const item of results) {
+    historyVisitMap[item.url] = (historyVisitMap[item.url] || 0) + item.visitCount;
+  }
+}
+
 function groupHistoryByUrl(results) {
   const grouped = {};
   historyVisitMap = {};
   for (const item of results) {
     const url = item.url;
     if (!grouped[url]) {
-      grouped[url] = { ...item, visitCount: item.visitCount };
+      grouped[url] = { ...item };
     } else {
+      // 同URLが複数ある場合、より新しいlastVisitTimeを保持しvisitCountを合算
       grouped[url].visitCount += item.visitCount;
+      if (item.lastVisitTime > grouped[url].lastVisitTime) {
+        grouped[url].lastVisitTime = item.lastVisitTime;
+      }
     }
     historyVisitMap[url] = (historyVisitMap[url] || 0) + item.visitCount;
   }
@@ -453,8 +509,7 @@ function normalizeForSearch(str) {
 }
 
 function highlightKeywords(text, rawKeywords) {
-  if (!rawKeywords?.length) return text;
-  if (!userOptions.highlight) return text;
+  if (!rawKeywords?.length || !userOptions.highlight) return escapeHtml(text);
 
   const normalizedText = normalizeForSearch(text);
   const highlightMap = new Array(text.length).fill(false);
@@ -476,7 +531,7 @@ function highlightKeywords(text, rawKeywords) {
   for (let i = 0; i < text.length; i++) {
     if (highlightMap[i] && !inMark) { result += "<mark>"; inMark = true; }
     else if (!highlightMap[i] && inMark) { result += "</mark>"; inMark = false; }
-    result += text[i];
+    result += escapeHtml(text[i]); // HTMLエスケープしてXSSを防止
   }
   if (inMark) result += "</mark>";
   return result;
@@ -561,6 +616,13 @@ function insertMessageItem(listElement, message) {
 
 function renderDomainFilters(domainMap) {
   const container = document.getElementById("domainFilters");
+
+  // 現在のチェック状態を保存（再描画後に復元する）
+  const uncheckedDomains = new Set();
+  container.querySelectorAll("input[data-domain]").forEach(cb => {
+    if (!cb.checked) uncheckedDomains.add(cb.dataset.domain);
+  });
+
   container.innerHTML = "";
 
   const sorted = Object.entries(domainMap).sort((a, b) => b[1] - a[1]);
@@ -579,12 +641,17 @@ function renderDomainFilters(domainMap) {
     const id = `filter-${domain.replace(/\./g, "_")}`;
     const div = document.createElement("div");
     div.className = "form-check";
+    const isChecked = !uncheckedDomains.has(domain); // 前回のチェック状態を復元
     div.innerHTML = `
-      <input class="form-check-input" type="checkbox" id="${id}" data-domain="${domain}" checked>
-      <label class="form-check-label" for="${id}">${domain} (${count})</label>
+      <input class="form-check-input" type="checkbox" id="${id}" data-domain="${escapeHtml(domain)}"${isChecked ? " checked" : ""}>
+      <label class="form-check-label" for="${id}">${escapeHtml(domain)} (${count})</label>
     `;
     container.appendChild(div);
   });
+
+  // 「すべて」の状態を再計算
+  const anyUnchecked = sorted.some(([domain]) => uncheckedDomains.has(domain));
+  document.getElementById("filter-all").checked = !anyUnchecked;
 
   document.getElementById("filter-all").addEventListener("change", (e) => {
     const isChecked = e.target.checked;
