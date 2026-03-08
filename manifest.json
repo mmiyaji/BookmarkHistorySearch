@@ -5,7 +5,7 @@
   "version": "2.5.0",
   "default_locale": "en",
 
-  "permissions": ["storage", "bookmarks", "history", "tabs"],
+  "permissions": ["storage", "bookmarks", "history", "tabs", "favicon"],
 
   "commands": {
     "_execute_action": {

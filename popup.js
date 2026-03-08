@@ -361,6 +361,11 @@ function isSafeUrl(url) {
   } catch { return false; }
 }
 
+// Chrome内蔵ファビコンキャッシュを使用（外部送信なし・ローカルサイト対応）
+function getFaviconUrl(url) {
+  return chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(url)}&size=16`);
+}
+
 function runSearch() {
   const rawQuery = document.getElementById("searchInput").value.trim();
   const thisSearchId = ++currentSearchId;
@@ -544,7 +549,7 @@ function createBookmarkLi(b, keywords) {
 
   // Favicon
   const favicon = document.createElement("img");
-  favicon.src = `https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(url)}`;
+  favicon.src = getFaviconUrl(url);
   favicon.className = "me-1";
   li.appendChild(favicon);
 
@@ -690,7 +695,7 @@ function createHistoryLi(h, keywords) {
 
   // Favicon
   const favicon = document.createElement("img");
-  favicon.src = `https://www.google.com/s2/favicons?sz=16&domain_url=${encodeURIComponent(url)}`;
+  favicon.src = getFaviconUrl(url);
   favicon.className = "me-1";
   li.appendChild(favicon);
 
