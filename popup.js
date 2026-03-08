@@ -54,7 +54,7 @@ async function bootstrap() {
 
   chrome.storage.sync.get(
     ["searchMode","searchTarget","highlight","groupSameTitle","historyMaxResults","historyPeriod",
-     "minQueryLength","popupHeight","popupWidth","sortOrder","displayLimit","enableRecentSearches"],
+     "minQueryLength","popupHeight","popupWidth","sortOrder","displayLimit","enableRecentSearches","showFavicons"],
     (data) => {
       userOptions = {
         searchMode: data.searchMode || "and",
@@ -68,7 +68,8 @@ async function bootstrap() {
         popupWidth: parseInt(data.popupWidth) || 500,
         sortOrder: data.sortOrder || "default",
         displayLimit: parseInt(data.displayLimit) || 50,
-        enableRecentSearches: data.enableRecentSearches !== false
+        enableRecentSearches: data.enableRecentSearches !== false,
+        showFavicons: data.showFavicons !== false
       };
 
       document.documentElement.style.width = `${userOptions.popupWidth}px`;
@@ -571,10 +572,12 @@ function createBookmarkLi(b, keywords) {
   }
 
   // Favicon
-  const favicon = document.createElement("img");
-  favicon.className = "me-1";
-  applyFavicon(favicon, url);
-  li.appendChild(favicon);
+  if (userOptions.showFavicons) {
+    const favicon = document.createElement("img");
+    favicon.className = "me-1";
+    applyFavicon(favicon, url);
+    li.appendChild(favicon);
+  }
 
   // Folder badge
   if (b.folderPath && b.folderPath.length) {
@@ -717,10 +720,12 @@ function createHistoryLi(h, keywords) {
   }
 
   // Favicon
-  const favicon = document.createElement("img");
-  favicon.className = "me-1";
-  applyFavicon(favicon, url);
-  li.appendChild(favicon);
+  if (userOptions.showFavicons) {
+    const favicon = document.createElement("img");
+    favicon.className = "me-1";
+    applyFavicon(favicon, url);
+    li.appendChild(favicon);
+  }
 
   // Elapsed time badge
   if (h.lastVisitTime) {

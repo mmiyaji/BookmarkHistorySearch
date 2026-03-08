@@ -74,6 +74,7 @@
     "opt_displayLimit_note": { "message": "「もっと見る」ボタンで追加表示します。" },
 
     "opt_enableRecentSearches": { "message": "最近の検索履歴を保存する" },
+    "opt_showFavicons": { "message": "ファビコンを表示する" },
 
     "opt_displaySettings": { "message": "表示設定" },
     "opt_themeMode": { "message": "カラーモード" },

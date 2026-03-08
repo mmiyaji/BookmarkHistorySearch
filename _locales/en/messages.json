@@ -74,6 +74,7 @@
     "opt_displayLimit_note": { "message": "Use 'Load more' button to show additional results." },
 
     "opt_enableRecentSearches": { "message": "Save recent searches" },
+    "opt_showFavicons": { "message": "Show favicons" },
 
     "opt_displaySettings": { "message": "Display Settings" },
     "opt_themeMode": { "message": "Color mode" },
