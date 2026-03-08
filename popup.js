@@ -24,7 +24,7 @@ let userOptions = {
   historyPeriod: 90,
   minQueryLength: 2,
   popupHeight: 600,
-  popupWidth: 350,
+  popupWidth: 500,
   sortOrder: "default",
   displayLimit: 50,
   enableRecentSearches: true
@@ -65,7 +65,7 @@ async function bootstrap() {
         historyPeriod: data.historyPeriod || 90,
         minQueryLength: parseInt(data.minQueryLength) || 2,
         popupHeight: parseInt(data.popupHeight) || 600,
-        popupWidth: parseInt(data.popupWidth) || 350,
+        popupWidth: parseInt(data.popupWidth) || 500,
         sortOrder: data.sortOrder || "default",
         displayLimit: parseInt(data.displayLimit) || 50,
         enableRecentSearches: data.enableRecentSearches !== false

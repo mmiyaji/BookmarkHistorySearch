@@ -5,7 +5,7 @@ const DEFAULT_SETTINGS = {
   searchMode: "and",
   searchTarget: "both",
   theme: "auto",
-  popupWidth: 350,
+  popupWidth: 500,
   popupHeight: 600,
   highlight: true,
   groupSameTitle: true,
