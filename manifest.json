@@ -43,8 +43,7 @@
         "css/bootstrap.min.css",
         "css/fontawesome.all.min.css",
         "css/webfonts/*.woff2",
-        "_locales/en/messages.json",
-        "_locales/ja/messages.json"
+        "_locales/*/messages.json"
       ],
       "matches": ["<all_urls>"]
     }

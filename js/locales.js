@@ -4,7 +4,14 @@ const LocaleConfig = (() => {
   const SUPPORTED_LOCALES = [
     { code: "en", label: "English", aliases: ["en"] },
     { code: "ja", label: "日本語", aliases: ["ja"] },
-    { code: "fr", label: "Français", aliases: ["fr"] }
+    { code: "fr", label: "Français", aliases: ["fr"] },
+    { code: "es", label: "Español", aliases: ["es"] },
+    { code: "de", label: "Deutsch", aliases: ["de"] },
+    { code: "it", label: "Italiano", aliases: ["it"] },
+    { code: "pt_BR", label: "Português (Brasil)", aliases: ["pt-br", "pt_br", "pt"] },
+    { code: "zh_CN", label: "简体中文", aliases: ["zh-cn", "zh_cn", "zh-hans", "zh"] },
+    { code: "zh_TW", label: "繁體中文", aliases: ["zh-tw", "zh_tw", "zh-hant"] },
+    { code: "ko", label: "한국어", aliases: ["ko"] }
   ];
 
   function canonicalizeLocale(value) {
