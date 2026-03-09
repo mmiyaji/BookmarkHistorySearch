@@ -290,54 +290,6 @@ function deleteRecentSearch(query) {
   });
 }
 
-// --- Feature 6+7: buildMatchFn with regex + exclude keywords -----------------
-function buildMatchFn(rawQuery) {
-  if (userOptions.searchMode === "regex") {
-    let regex;
-    try {
-      regex = new RegExp(rawQuery, "i");
-    } catch (err) {
-      return { fn: null, includeKeywords: [], excludeKeywords: [], error: err.message };
-    }
-    return { fn: (text) => regex.test(text), includeKeywords: [], excludeKeywords: [] };
-  }
-
-  const normalizedQuery = normalizeForSearch(rawQuery);
-  const tokens = normalizedQuery.split(" ").filter(Boolean);
-  const includeKeywords = tokens.filter(k => !k.startsWith("-"));
-  const excludeKeywords = tokens.filter(k => k.startsWith("-")).map(k => k.slice(1)).filter(Boolean);
-
-  const fn = (text) => {
-    const normalized = normalizeForSearch(text);
-    const includeOk = userOptions.searchMode === "and"
-      ? includeKeywords.every(k => normalized.includes(k))
-      : includeKeywords.length === 0 || includeKeywords.some(k => normalized.includes(k));
-    const excludeOk = excludeKeywords.every(k => !normalized.includes(k));
-    return includeOk && excludeOk;
-  };
-
-  return { fn, includeKeywords, excludeKeywords };
-}
-
-// --- Feature 1: Sort items ---------------------------------------------------
-function sortItems(items, sortOrder) {
-  if (sortOrder === "visitCount") {
-    return [...items].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0));
-  } else if (sortOrder === "lastVisit") {
-    return [...items].sort((a, b) => (b.lastVisitTime || 0) - (a.lastVisitTime || 0));
-  } else if (sortOrder === "title") {
-    return [...items].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-  }
-  return items; // default
-}
-
-// --- Feature 9: Float open tabs to top within current sort -------------------
-function applyOpenTabsPriority(items) {
-  const open = items.filter(item => openTabUrls.has(item.url));
-  const rest = items.filter(item => !openTabUrls.has(item.url));
-  return [...open, ...rest];
-}
-
 function debounce(fn, ms) {
   let timer;
   return (...args) => {
@@ -427,7 +379,7 @@ function runSearch() {
   });
 
   // Features 6+7: Build match function
-  const { fn: matchFn, includeKeywords, error: regexError } = buildMatchFn(rawQuery);
+  const { fn: matchFn, includeKeywords, error: regexError } = PopupSearch.buildMatchFn(rawQuery, userOptions.searchMode);
 
   if (!matchFn) {
     insertMessageItem(resultsAll, tx("ui_regexError", regexError || "invalid"));
@@ -441,17 +393,18 @@ function runSearch() {
     loadHistoryOnce((historyResults) => {
       if (thisSearchId !== currentSearchId) return;
 
-      let grouped = groupHistoryByUrl(historyResults);
-      if (userOptions.groupSameTitle) grouped = mergeSameTitleHistory(grouped);
+      historyVisitMap = PopupSearch.buildHistoryVisitMap(historyResults);
+      let grouped = PopupSearch.groupHistoryByUrl(historyResults);
+      if (userOptions.groupSameTitle) grouped = PopupSearch.mergeSameTitleHistory(grouped);
 
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
         ChromeApi.getBookmarksTree((nodes) => {
           if (thisSearchId !== currentSearchId) return;
 
-          const allBookmarks = collectBookmarkMatches(nodes, matchFn);
-          const allHistories = collectHistoryMatches(grouped, matchFn);
+          const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
+          const allHistories = PopupSearch.collectHistoryMatches(grouped, matchFn, isSafeUrl);
 
-          renderDomainFilters(getDomainFacets([...allBookmarks, ...allHistories]));
+          renderDomainFilters(PopupSearch.getDomainFacets([...allBookmarks, ...allHistories]));
           renderFolderFilters(allBookmarks);
 
           const countBookmarks = renderBookmarkItems(allBookmarks, highlightKeywordList, resultsAll, resultsBookmarks);
@@ -460,8 +413,8 @@ function runSearch() {
           updateBadgeAndMessages(countAll, countBookmarks, countHistory);
         });
       } else {
-        const allHistories = collectHistoryMatches(grouped, matchFn);
-        renderDomainFilters(getDomainFacets(allHistories));
+        const allHistories = PopupSearch.collectHistoryMatches(grouped, matchFn, isSafeUrl);
+        renderDomainFilters(PopupSearch.getDomainFacets(allHistories));
         renderFolderFilters([]);
         const countHistory = renderHistoryItems(allHistories, highlightKeywordList, resultsAll, resultsHistory);
         updateBadgeAndMessages(countHistory, 0, countHistory);
@@ -469,39 +422,13 @@ function runSearch() {
     });
   } else if (userOptions.searchTarget === "bookmarks") {
     ChromeApi.getBookmarksTree((nodes) => {
-      const allBookmarks = collectBookmarkMatches(nodes, matchFn);
-      renderDomainFilters(getDomainFacets(allBookmarks));
+      const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
+      renderDomainFilters(PopupSearch.getDomainFacets(allBookmarks));
       renderFolderFilters(allBookmarks);
       const countBookmarks = renderBookmarkItems(allBookmarks, highlightKeywordList, resultsAll, resultsBookmarks);
       updateBadgeAndMessages(countBookmarks, countBookmarks, 0);
     });
   }
-}
-
-function collectBookmarks(nodes, result, path = []) {
-  for (const node of nodes) {
-    if (node.url) {
-      result.push({ ...node, folderPath: [...path] });
-    } else if (node.children) {
-      collectBookmarks(node.children, result, [...path, node.title]);
-    }
-  }
-}
-
-function collectBookmarkMatches(nodes, matchFn) {
-  const all = [];
-  collectBookmarks(nodes, all);
-  return all.filter(b => {
-    if (!isSafeUrl(b.url)) return false;
-    return matchFn((b.title + " " + b.url).toLowerCase());
-  });
-}
-
-function collectHistoryMatches(grouped, matchFn) {
-  return grouped.filter(h => {
-    if (!isSafeUrl(h.url)) return false;
-    return matchFn((h.title + " " + h.url).toLowerCase());
-  });
 }
 
 // Feature 10: DocumentFragment + Features 1,2,4,8,9,11
@@ -521,7 +448,7 @@ function renderBookmarkItems(matched, keywords, resultsAll, resultsBookmarks) {
   });
 
   // Feature 1 + 9: Sort then open tabs priority
-  filtered = applyOpenTabsPriority(sortItems(filtered, userOptions.sortOrder));
+  filtered = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(filtered, userOptions.sortOrder), openTabUrls);
 
   const limit = userOptions.displayLimit || 50;
   renderBookmarkBatch(filtered, 0, limit, keywords, resultsAll, resultsBookmarks);
@@ -600,14 +527,14 @@ function createBookmarkLi(b, keywords) {
   const a = document.createElement("a");
   a.href = escapeHtml(url);
   a.target = "_blank";
-  a.innerHTML = highlightKeywords(b.title || "", keywords);
+  a.innerHTML = PopupSearch.highlightKeywords(b.title || "", keywords, userOptions.highlight);
   li.appendChild(a);
 
   // URL display
   const urlDiv = document.createElement("div");
   urlDiv.className = "url-text text-muted small ms-4";
   urlDiv.title = url;
-  urlDiv.innerHTML = highlightKeywords(url, keywords);
+  urlDiv.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
   li.appendChild(urlDiv);
 
   li.title = url;
@@ -669,7 +596,7 @@ function renderHistoryItems(matched, keywords, resultsAll, resultsHistory) {
   });
 
   // Feature 1 + 9
-  filtered = applyOpenTabsPriority(sortItems(filtered, userOptions.sortOrder));
+  filtered = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(filtered, userOptions.sortOrder), openTabUrls);
 
   const limit = userOptions.displayLimit || 50;
   renderHistoryBatch(filtered, 0, limit, keywords, resultsAll, resultsHistory);
@@ -731,7 +658,7 @@ function createHistoryLi(h, keywords) {
   if (h.lastVisitTime) {
     const elapsedBadge = document.createElement("span");
     elapsedBadge.className = "badge bg-primary me-1";
-    elapsedBadge.textContent = formatElapsedTime(h.lastVisitTime);
+    elapsedBadge.textContent = PopupSearch.formatElapsedTime(h.lastVisitTime, tx, t);
     li.appendChild(elapsedBadge);
   }
 
@@ -747,14 +674,14 @@ function createHistoryLi(h, keywords) {
   const a = document.createElement("a");
   a.href = escapeHtml(url);
   a.target = "_blank";
-  a.innerHTML = highlightKeywords(h.title || "", keywords);
+  a.innerHTML = PopupSearch.highlightKeywords(h.title || "", keywords, userOptions.highlight);
   li.appendChild(a);
 
   // URL display
   const urlDiv = document.createElement("div");
   urlDiv.className = "url-text text-muted small ms-4";
   urlDiv.title = url;
-  urlDiv.innerHTML = highlightKeywords(url, keywords);
+  urlDiv.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
   li.appendChild(urlDiv);
 
   li.title = url;
@@ -895,7 +822,7 @@ function preloadHistory() {
   ChromeApi.searchHistory({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
     cachedHistory = results;
     historyCacheTimestamp = now;
-    buildHistoryVisitMap(results);
+    historyVisitMap = PopupSearch.buildHistoryVisitMap(results);
   });
 }
 
@@ -912,102 +839,6 @@ function loadHistoryOnce(callback) {
     historyCacheTimestamp = Date.now();
     callback(results);
   });
-}
-
-function buildHistoryVisitMap(results) {
-  historyVisitMap = {};
-  for (const item of results) {
-    historyVisitMap[item.url] = (historyVisitMap[item.url] || 0) + item.visitCount;
-  }
-}
-
-function groupHistoryByUrl(results) {
-  const grouped = {};
-  historyVisitMap = {};
-  for (const item of results) {
-    const url = item.url;
-    if (!grouped[url]) {
-      grouped[url] = { ...item };
-    } else {
-      grouped[url].visitCount += item.visitCount;
-      if (item.lastVisitTime > grouped[url].lastVisitTime) {
-        grouped[url].lastVisitTime = item.lastVisitTime;
-      }
-    }
-    historyVisitMap[url] = (historyVisitMap[url] || 0) + item.visitCount;
-  }
-  return Object.values(grouped);
-}
-
-function mergeSameTitleHistory(grouped) {
-  const mergeMap = new Map();
-  for (const item of grouped) {
-    let baseKey;
-    try {
-      const u = new URL(item.url);
-      baseKey = (item.title || "") + "\0" + u.protocol + "//" + u.hostname + u.pathname;
-    } catch {
-      baseKey = (item.title || "") + "\0" + item.url;
-    }
-    const existing = mergeMap.get(baseKey);
-    if (!existing) {
-      mergeMap.set(baseKey, { ...item });
-    } else {
-      existing.visitCount += item.visitCount;
-      if (item.lastVisitTime > existing.lastVisitTime) {
-        existing.lastVisitTime = item.lastVisitTime;
-        existing.url = item.url;
-      }
-    }
-  }
-  return Array.from(mergeMap.values());
-}
-
-function normalizeForSearch(str) {
-  return str
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\u30a1-\u30f6]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60))
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function highlightKeywords(text, rawKeywords) {
-  if (!rawKeywords?.length || !userOptions.highlight) return escapeHtml(text);
-  const normalizedText = normalizeForSearch(text);
-  const highlightMap = new Array(text.length).fill(false);
-  for (const raw of rawKeywords) {
-    if (!raw) continue;
-    const normKey = normalizeForSearch(raw);
-    if (!normKey) continue;
-    let start = 0;
-    while (true) {
-      const index = normalizedText.indexOf(normKey, start);
-      if (index === -1) break;
-      for (let i = index; i < index + normKey.length; i++) highlightMap[i] = true;
-      start = index + normKey.length;
-    }
-  }
-  let result = "";
-  let inMark = false;
-  for (let i = 0; i < text.length; i++) {
-    if (highlightMap[i] && !inMark) { result += "<mark>"; inMark = true; }
-    else if (!highlightMap[i] && inMark) { result += "</mark>"; inMark = false; }
-    result += escapeHtml(text[i]);
-  }
-  if (inMark) result += "</mark>";
-  return result;
-}
-
-function formatElapsedTime(ms) {
-  const diff = Date.now() - ms;
-  const minutes = Math.floor(diff / 60000);
-  const hours   = Math.floor(minutes / 60);
-  const days    = Math.floor(hours / 24);
-  if (days > 0)    return tx("ui_daysAgo",    days);
-  if (hours > 0)   return tx("ui_hoursAgo",   hours);
-  if (minutes > 0) return tx("ui_minutesAgo", minutes);
-  return t("ui_justNow");
 }
 
 function applyTabVisibility(target) {
@@ -1190,17 +1021,6 @@ function updateBadgeAndMessages(countAll, countBookmarks, countHistory) {
   if (countAll === 0)        insertMessageItem(document.getElementById("results-all"),       t("ui_noResults"));
   if (countBookmarks === 0)  insertMessageItem(document.getElementById("results-bookmarks"), t("ui_noResults"));
   if (countHistory === 0)    insertMessageItem(document.getElementById("results-history"),   t("ui_noResults"));
-}
-
-function getDomainFacets(results) {
-  const countMap = {};
-  for (const item of results) {
-    try {
-      const domain = new URL(item.url).hostname;
-      countMap[domain] = (countMap[domain] || 0) + 1;
-    } catch { }
-  }
-  return countMap;
 }
 
 function getSelectedDomains() {
