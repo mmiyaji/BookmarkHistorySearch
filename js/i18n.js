@@ -85,6 +85,5 @@ const I18N = (() => {
   // 今使っている t を返す（必要なら）
   function t() { return currentT; }
 
-  return { init, STORAGE_KEY };
   return { init, applyLocale, STORAGE_KEY, t };
 })();
