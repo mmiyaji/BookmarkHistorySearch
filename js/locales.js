@@ -3,7 +3,8 @@ const LocaleConfig = (() => {
   const STORAGE_KEY = "langOverride";
   const SUPPORTED_LOCALES = [
     { code: "en", label: "English", aliases: ["en"] },
-    { code: "ja", label: "日本語", aliases: ["ja"] }
+    { code: "ja", label: "日本語", aliases: ["ja"] },
+    { code: "fr", label: "Français", aliases: ["fr"] }
   ];
 
   function canonicalizeLocale(value) {
