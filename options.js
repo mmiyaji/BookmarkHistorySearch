@@ -1,5 +1,9 @@
-// options.js — 言語即時プレビュー & 安全な sendMessage
+// options.js
 let t = (k, f) => f || k;
+
+function setDocumentLanguage(locale) {
+  document.documentElement.setAttribute("lang", LocaleConfig.toHtmlLang(locale));
+}
 
 const DEFAULT_SETTINGS = {
   searchMode: "and",
@@ -12,33 +16,56 @@ const DEFAULT_SETTINGS = {
   historyMaxResults: 10000,
   historyPeriod: 90,
   minQueryLength: 2,
-  langOverride: "auto", // "auto" | "en" | "ja"
+  langOverride: "auto",
   sortOrder: "default",
   displayLimit: 50,
   enableRecentSearches: true,
   showFavicons: true
 };
 
-document.addEventListener("DOMContentLoaded", async () => {
-  // i18n 初期化（data-i18n を反映し t() を取得）
-  t = await I18N.init();
+function getLanguageOptions() {
+  return [
+    { value: "auto", label: t("opt_lang_auto") },
+    ...LocaleConfig.getSupportedLocales().map((locale) => ({
+      value: locale.code,
+      label: locale.label
+    }))
+  ];
+}
 
-  // 設定ロード
+function renderLanguageOptions(selectedValue) {
+  const langSel = document.getElementById("language");
+  if (!langSel) return;
+
+  const currentValue = selectedValue ?? langSel.value ?? DEFAULT_SETTINGS.langOverride;
+  langSel.innerHTML = "";
+
+  for (const option of getLanguageOptions()) {
+    const el = document.createElement("option");
+    el.value = option.value;
+    el.textContent = option.label;
+    if (option.value === currentValue) el.selected = true;
+    langSel.appendChild(el);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  t = await I18N.init();
+  renderLanguageOptions(DEFAULT_SETTINGS.langOverride);
+
   chrome.storage.sync.get(Object.keys(DEFAULT_SETTINGS), (data) => {
     const merged = { ...DEFAULT_SETTINGS, ...data };
     setFormFields(merged);
   });
 
-  // 言語セレクタ：保存前プレビュー（リロード不要）
   const langSel = document.getElementById("language");
   if (langSel) {
     langSel.addEventListener("change", async (e) => {
-      const val = e.target.value;                 // "auto"|"en"|"ja"
-      t = await I18N.applyLocale(val);            // 即時再翻訳
-      const langAttr = (val === "auto")
-        ? ((navigator.languages?.[0] || navigator.language || "en").toLowerCase())
-        : val;
-      document.documentElement.setAttribute("lang", langAttr.startsWith("ja") ? "ja" : "en");
+      const val = e.target.value;
+      t = await I18N.applyLocale(val);
+      renderLanguageOptions(val);
+      const langAttr = (val === "auto") ? (navigator.languages?.[0] || navigator.language || LocaleConfig.DEFAULT_LOCALE) : val;
+      setDocumentLanguage(langAttr);
     });
   }
 
@@ -60,7 +87,8 @@ function setFormFields(data) {
   document.getElementById("historyMaxResults").value = data.historyMaxResults;
   document.getElementById("historyPeriod").value = data.historyPeriod;
   document.getElementById("minQueryLength").value = data.minQueryLength;
-  document.getElementById("language").value = data.langOverride || "auto";
+  setDocumentLanguage(data.langOverride || DEFAULT_SETTINGS.langOverride);
+  renderLanguageOptions(data.langOverride || DEFAULT_SETTINGS.langOverride);
   document.getElementById("sortOrder").value = data.sortOrder || "default";
   document.getElementById("displayLimit").value = data.displayLimit || 50;
   document.getElementById("enableRecentSearches").checked = data.enableRecentSearches !== false;
@@ -79,23 +107,27 @@ function onSave() {
   const historyMaxResults = Number(document.getElementById("historyMaxResults").value);
   const historyPeriod = document.getElementById("historyPeriod").value;
   const minQueryLength = Number(document.getElementById("minQueryLength").value);
-  const langOverride = document.getElementById("language").value; // "auto"|"en"|"ja"
+  const langOverride = document.getElementById("language").value;
   const sortOrder = document.getElementById("sortOrder").value;
   const displayLimit = Number(document.getElementById("displayLimit").value);
   const enableRecentSearches = document.getElementById("enableRecentSearches").checked;
   const showFavicons = document.getElementById("showFavicons").checked;
 
-  if (!["and","or","regex"].includes(searchMode)) return flashStatus(t("opt_err_mode"), true);
-  if (!["auto","light","dark"].includes(theme)) return flashStatus(t("opt_err_theme"), true);
-  if (!["both","bookmarks","history"].includes(searchTarget)) return flashStatus(t("opt_err_target"), true);
-  if (!Number.isFinite(popupWidth) || popupWidth <= 0 || !Number.isFinite(popupHeight) || popupHeight <= 0)
+  if (!["and", "or", "regex"].includes(searchMode)) return flashStatus(t("opt_err_mode"), true);
+  if (!["auto", "light", "dark"].includes(theme)) return flashStatus(t("opt_err_theme"), true);
+  if (!["both", "bookmarks", "history"].includes(searchTarget)) return flashStatus(t("opt_err_target"), true);
+  if (!Number.isFinite(popupWidth) || popupWidth <= 0 || !Number.isFinite(popupHeight) || popupHeight <= 0) {
     return flashStatus(t("opt_err_size"), true);
-  if (!Number.isFinite(historyMaxResults) || historyMaxResults <= 0)
+  }
+  if (!Number.isFinite(historyMaxResults) || historyMaxResults <= 0) {
     return flashStatus(t("opt_err_histmax"), true);
-  if (!Number.isFinite(minQueryLength) || minQueryLength < 1)
+  }
+  if (!Number.isFinite(minQueryLength) || minQueryLength < 1) {
     return flashStatus(t("opt_err_minlen"), true);
-  if (!["auto","en","ja"].includes(langOverride))
-    return flashStatus(t("opt_err_lang", "言語は auto / en / ja のいずれかです。"), true);
+  }
+  if (!(langOverride === "auto" || LocaleConfig.isSupportedLocale(langOverride))) {
+    return flashStatus(t("opt_err_lang"), true);
+  }
 
   chrome.storage.sync.set({
     searchMode, searchTarget, theme,
@@ -103,19 +135,15 @@ function onSave() {
     historyMaxResults, historyPeriod, minQueryLength,
     langOverride, sortOrder, displayLimit, enableRecentSearches, showFavicons
   }, () => {
-    // 他ページへ通知（受信側が居なくてもエラーにしない）
     safeSendMessage({ type: "langChanged" });
-
-    // 自ページも念のため再適用（保存＝確定）
-    I18N.applyLocale(langOverride).then(tt => { t = tt; });
-
-    flashStatus(t("opt_saved", "保存しました！"));
+    I18N.applyLocale(langOverride).then((tt) => { t = tt; });
+    flashStatus(t("opt_saved"));
   });
 }
 
 function onReset() {
   setFormFields(DEFAULT_SETTINGS);
-  flashStatus(t("opt_reset_done", "デフォルト値に戻しました！（適用するには「設定を保存する」を押してください）"));
+  flashStatus(t("opt_reset_done"));
 }
 
 function flashStatus(msg, isError = false) {
@@ -135,9 +163,8 @@ function applyTheme(theme) {
   }
 }
 
-// 受信側が無いときの「Receiving end does not exist」を握りつぶす
 function safeSendMessage(payload) {
   try {
     chrome.runtime.sendMessage(payload, () => void chrome.runtime.lastError);
-  } catch { /* ignore */ }
+  } catch {}
 }

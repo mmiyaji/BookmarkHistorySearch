@@ -4,10 +4,25 @@
 let t = (k, f) => f || k;
 const tx = (key, ...args) => (t(key) || key).replace(/\$([0-9]+)/g, (_, i) => String(args[i - 1] ?? ""));
 
+function setDocumentLanguage(locale) {
+  document.documentElement.setAttribute("lang", LocaleConfig.toHtmlLang(locale));
+}
+
+function refreshDocumentLanguage() {
+  ChromeApi.getSync([LocaleConfig.STORAGE_KEY], (data) => {
+    const override = data?.[LocaleConfig.STORAGE_KEY];
+    const locale = (!override || override === "auto")
+      ? (navigator.languages?.[0] || navigator.language || LocaleConfig.DEFAULT_LOCALE)
+      : override;
+    setDocumentLanguage(locale);
+  });
+}
+
 chrome.runtime?.onMessage?.addListener((msg) => {
   if (msg?.type === "langChanged") {
     I18N.init().then((tt) => {
       t = tt;
+      refreshDocumentLanguage();
       const input = document.getElementById("searchInput");
       if (input) input.setAttribute("placeholder", t("ui_searchPlaceholder", input.getAttribute("placeholder")));
       runSearch();
@@ -46,11 +61,7 @@ document.addEventListener("DOMContentLoaded", () => { bootstrap(); });
 
 async function bootstrap() {
   t = await I18N.init();
-  try {
-    const langs = navigator.languages?.length ? navigator.languages : [navigator.language || "en"];
-    const l = (langs[0] || "en").toLowerCase();
-    document.documentElement.setAttribute("lang", l.startsWith("ja") ? "ja" : "en");
-  } catch {}
+  refreshDocumentLanguage();
 
   ChromeApi.getSync(
     ["searchMode","searchTarget","highlight","groupSameTitle","historyMaxResults","historyPeriod",

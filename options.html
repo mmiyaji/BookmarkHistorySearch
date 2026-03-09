@@ -7,6 +7,7 @@
   <link href="css/bootstrap.min.css" rel="stylesheet">
 
   <!-- i18n を options.js より先に読み込む -->
+  <script defer src="js/locales.js"></script>
   <script defer src="js/i18n.js"></script>
   <script defer src="options.js"></script>
 </head>
@@ -116,11 +117,7 @@
 
     <div class="mb-4">
       <label class="form-label" data-i18n="opt_language">表示言語</label>
-      <select id="language" class="form-select">
-        <option value="auto" data-i18n="opt_lang_auto">自動（ブラウザに合わせる）</option>
-        <option value="en" data-i18n="opt_lang_en">English</option>
-        <option value="ja" data-i18n="opt_lang_ja">日本語</option>
-      </select>
+      <select id="language" class="form-select"></select>
       <div class="form-text" data-i18n="opt_language_note">
         ここで選んだ言語がTadorunのUIに適用されます（自動はChromeの言語に追従）。
       </div>
