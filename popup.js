@@ -52,7 +52,7 @@ async function bootstrap() {
     document.documentElement.setAttribute("lang", l.startsWith("ja") ? "ja" : "en");
   } catch {}
 
-  chrome.storage.sync.get(
+  ChromeApi.getSync(
     ["searchMode","searchTarget","highlight","groupSameTitle","historyMaxResults","historyPeriod",
      "minQueryLength","popupHeight","popupWidth","sortOrder","displayLimit","enableRecentSearches","showFavicons"],
     (data) => {
@@ -87,7 +87,7 @@ async function bootstrap() {
       }
 
       // Feature 9: Open tabs detection
-      chrome.tabs.query({}, (tabs) => {
+      ChromeApi.queryTabs({}, (tabs) => {
         openTabUrls = new Set(tabs.map(tab => tab.url).filter(Boolean));
       });
 
@@ -217,18 +217,18 @@ function scheduleRecentSearchSave(query) {
 
 function saveRecentSearch(query) {
   if (!userOptions.enableRecentSearches || !query) return;
-  chrome.storage.local.get("recentSearches", (data) => {
+  ChromeApi.getLocal("recentSearches", (data) => {
     let searches = Array.isArray(data.recentSearches) ? data.recentSearches : [];
     searches = searches.filter(s => s !== query);
     searches.unshift(query);
     if (searches.length > 10) searches = searches.slice(0, 10);
-    chrome.storage.local.set({ recentSearches: searches });
+    ChromeApi.setLocal({ recentSearches: searches });
   });
 }
 
 function showRecentSearchesDropdown() {
   if (!userOptions.enableRecentSearches) return;
-  chrome.storage.local.get("recentSearches", (data) => {
+  ChromeApi.getLocal("recentSearches", (data) => {
     const searches = Array.isArray(data.recentSearches) ? data.recentSearches : [];
     const dropdown = document.getElementById("recentSearchesDropdown");
     if (!dropdown) return;
@@ -281,10 +281,10 @@ function hideRecentSearchesDropdown() {
 }
 
 function deleteRecentSearch(query) {
-  chrome.storage.local.get("recentSearches", (data) => {
+  ChromeApi.getLocal("recentSearches", (data) => {
     let searches = Array.isArray(data.recentSearches) ? data.recentSearches : [];
     searches = searches.filter(s => s !== query);
-    chrome.storage.local.set({ recentSearches: searches }, () => {
+    ChromeApi.setLocal({ recentSearches: searches }, () => {
       showRecentSearchesDropdown();
     });
   });
@@ -445,7 +445,7 @@ function runSearch() {
       if (userOptions.groupSameTitle) grouped = mergeSameTitleHistory(grouped);
 
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
-        chrome.bookmarks.getTree((nodes) => {
+        ChromeApi.getBookmarksTree((nodes) => {
           if (thisSearchId !== currentSearchId) return;
 
           const allBookmarks = collectBookmarkMatches(nodes, matchFn);
@@ -468,7 +468,7 @@ function runSearch() {
       }
     });
   } else if (userOptions.searchTarget === "bookmarks") {
-    chrome.bookmarks.getTree((nodes) => {
+    ChromeApi.getBookmarksTree((nodes) => {
       const allBookmarks = collectBookmarkMatches(nodes, matchFn);
       renderDomainFilters(getDomainFacets(allBookmarks));
       renderFolderFilters(allBookmarks);
@@ -632,7 +632,7 @@ function createBookmarkLi(b, keywords) {
   deleteBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (confirm(tx("ui_confirmDelete", b.title || url))) {
-      chrome.bookmarks.remove(b.id, () => {
+      ChromeApi.removeBookmark(b.id, () => {
         li.remove();
       });
     }
@@ -848,7 +848,7 @@ function showBookmarkEditForm(li, b) {
     const newTitle = titleInput.value.trim();
     const newUrl = urlInput.value.trim();
     if (!newTitle || !isSafeUrl(newUrl)) return;
-    chrome.bookmarks.update(b.id, { title: newTitle, url: newUrl }, () => {
+    ChromeApi.updateBookmark(b.id, { title: newTitle, url: newUrl }, () => {
       b.title = newTitle;
       b.url = newUrl;
       // Update displayed content
@@ -892,7 +892,7 @@ function preloadHistory() {
   if (userOptions.historyPeriod !== "all") {
     startTime = now - parseInt(userOptions.historyPeriod) * 24 * 60 * 60 * 1000;
   }
-  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
+  ChromeApi.searchHistory({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
     cachedHistory = results;
     historyCacheTimestamp = now;
     buildHistoryVisitMap(results);
@@ -907,7 +907,7 @@ function loadHistoryOnce(callback) {
   if (userOptions.historyPeriod !== "all") {
     startTime = now - parseInt(userOptions.historyPeriod) * 24 * 60 * 60 * 1000;
   }
-  chrome.history.search({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
+  ChromeApi.searchHistory({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
     cachedHistory = results;
     historyCacheTimestamp = Date.now();
     callback(results);
