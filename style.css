@@ -36,11 +36,20 @@ body {
 #domainFilters .form-check {
     margin-bottom: 4px;
 }
+
+#folderFilters {
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+#folderFilters .form-check {
+    margin-bottom: 4px;
+}
+
 #resultsWrapper {
     margin-top: -1px; /* タブ下線と接続させる */
     overflow-y: auto;
     flex-grow: 1;
-    overflow-y: auto;
 }
 
 .url-text {
@@ -75,6 +84,7 @@ html[data-bs-theme="dark"] .selected a {
 }
 #resultsWrapper li {
     cursor: pointer;
+    position: relative;
 }
 
 #resultsWrapper li:hover {
@@ -101,4 +111,214 @@ mark {
 html[data-bs-theme="dark"] mark {
     background-color: #ffc107;
     /* color: #fff; */
+}
+
+/* --- Copy button --- */
+.copy-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    background: transparent;
+    border: 1px solid var(--bs-secondary);
+    border-radius: 3px;
+    color: var(--bs-secondary);
+    z-index: 10;
+}
+
+#resultsWrapper li:hover .copy-btn {
+    opacity: 1;
+}
+
+.copy-btn:hover {
+    background-color: var(--bs-secondary);
+    color: #fff;
+}
+
+/* --- Edit / Delete buttons for bookmarks --- */
+.item-actions {
+    position: absolute;
+    right: 32px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.15s;
+    display: flex;
+    gap: 2px;
+    z-index: 10;
+}
+
+#resultsWrapper li:hover .item-actions {
+    opacity: 1;
+}
+
+.edit-btn,
+.delete-btn {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    border-radius: 3px;
+    border: none;
+    cursor: pointer;
+}
+
+.edit-btn {
+    background: transparent;
+    border: 1px solid var(--bs-info);
+    color: var(--bs-info);
+}
+
+.edit-btn:hover {
+    background-color: var(--bs-info);
+    color: #fff;
+}
+
+.delete-btn {
+    background: transparent;
+    border: 1px solid var(--bs-danger);
+    color: var(--bs-danger);
+}
+
+.delete-btn:hover {
+    background-color: var(--bs-danger);
+    color: #fff;
+}
+
+/* --- Inline edit form --- */
+.bookmark-edit-form {
+    margin-top: 4px;
+    padding: 6px;
+    background: var(--bs-light);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 4px;
+}
+
+html[data-bs-theme="dark"] .bookmark-edit-form {
+    background: #333;
+}
+
+.bookmark-edit-form input {
+    font-size: 0.85rem;
+    padding: 2px 6px;
+    height: auto;
+}
+
+.bookmark-edit-form .btn {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+}
+
+/* --- Open tab badge --- */
+.open-tab-badge {
+    font-size: 0.7rem;
+    padding: 1px 5px;
+    background-color: #198754;
+    color: #fff;
+    border-radius: 3px;
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+/* --- Recent searches dropdown --- */
+#recentSearchesDropdown,
+#savedSearchesDropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+#recentSearchesDropdown .recent-header,
+#savedSearchesDropdown .recent-header {
+    font-size: 0.75rem;
+    color: var(--bs-secondary);
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+#recentSearchesDropdown .recent-item,
+#savedSearchesDropdown .recent-item {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+#recentSearchesDropdown .recent-item:hover,
+#savedSearchesDropdown .recent-item:hover {
+    background-color: var(--bs-secondary-bg);
+}
+
+#recentSearchesDropdown .recent-item .recent-text,
+#savedSearchesDropdown .recent-item .recent-text {
+    flex-grow: 1;
+}
+
+#recentSearchesDropdown .recent-item .recent-del,
+#savedSearchesDropdown .recent-item .recent-del {
+    background: none;
+    border: none;
+    color: var(--bs-secondary);
+    padding: 0 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+#recentSearchesDropdown .recent-item .recent-del:hover,
+#savedSearchesDropdown .recent-item .recent-del:hover {
+    opacity: 1;
+    color: var(--bs-danger);
+}
+
+/* --- Sort order select in toolbar --- */
+#sortOrderSelect {
+    font-size: 0.8rem;
+    padding: 2px 24px 2px 6px; /* 右側はドロップダウン矢印のスペース */
+    height: auto;
+    width: auto;
+    min-width: 0;
+}
+
+/* --- Load more button --- */
+.load-more-btn {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    font-size: 0.85rem;
+    background: var(--bs-secondary-bg);
+    border: none;
+    border-top: 1px solid var(--bs-border-color);
+    cursor: pointer;
+    color: var(--bs-secondary);
+    text-align: center;
+}
+
+.load-more-btn:hover {
+    background: var(--bs-secondary);
+    color: #fff;
+}
+
+/* --- Search input wrapper for dropdown positioning --- */
+.search-input-wrapper {
+    position: relative;
+    flex-grow: 1;
+}
+
+#saveSearchBtn.is-active {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary);
 }

@@ -4,16 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="opt_pageTitle">Settings</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/bootstrap.min.css" rel="stylesheet">
 
   <!-- i18n を options.js より先に読み込む -->
+  <script defer src="js/locales.js"></script>
   <script defer src="js/i18n.js"></script>
   <script defer src="options.js"></script>
 </head>
 <body>
   <div class="container py-4">
     <h1 class="text-center mb-4" data-i18n="opt_header">Tadorun - Bookmark &amp; Search History Settings</h1>
-    
+
     <h4 data-i18n="opt_searchSettings">検索設定</h4>
 
     <div class="mb-4">
@@ -21,9 +22,10 @@
       <select id="searchMode" class="form-select">
         <option value="and" data-i18n="opt_searchMode_and">AND検索</option>
         <option value="or" data-i18n="opt_searchMode_or">OR検索</option>
+        <option value="regex" data-i18n="opt_searchMode_regex">正規表現検索</option>
       </select>
     </div>
-  
+
     <div class="mb-4">
       <label class="form-label" data-i18n="opt_searchTarget">検索対象</label>
       <select id="searchTarget" class="form-select">
@@ -37,7 +39,15 @@
       <input class="form-check-input" type="checkbox" id="highlight">
       <label class="form-check-label" for="highlight" data-i18n="opt_highlight">キーワードのハイライトを有効にする</label>
     </div>
-    
+
+    <div class="form-check form-switch mb-1">
+      <input class="form-check-input" type="checkbox" id="groupSameTitle">
+      <label class="form-check-label" for="groupSameTitle" data-i18n="opt_groupSameTitle">クエリストリングが異なる同タイトルページをまとめる</label>
+    </div>
+    <div class="form-text mb-3" id="groupSameTitleNote" data-i18n="opt_groupSameTitle_note">
+      ホスト名・パスが同じでクエリストリングのみ異なり、タイトルも同じ履歴をひとつにまとめます。
+    </div>
+
     <div class="mb-4">
       <label class="form-label" data-i18n="opt_historyPeriod">履歴検索の対象期間</label>
       <select id="historyPeriod" class="form-select">
@@ -66,8 +76,36 @@
       </div>
     </div>
 
+    <div class="mb-4">
+      <label class="form-label" data-i18n="opt_sortOrder">並び順</label>
+      <select id="sortOrder" class="form-select">
+        <option value="default" data-i18n="opt_sortOrder_default">デフォルト</option>
+        <option value="visitCount" data-i18n="opt_sortOrder_visitCount">アクセス数順</option>
+        <option value="lastVisit" data-i18n="opt_sortOrder_lastVisit">最終アクセス順</option>
+        <option value="title" data-i18n="opt_sortOrder_title">タイトル順</option>
+      </select>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label" data-i18n="opt_displayLimit">1ページの表示件数</label>
+      <input type="number" class="form-control" id="displayLimit" min="10" max="500" step="10">
+      <div class="form-text" data-i18n="opt_displayLimit_note">
+        「もっと見る」ボタンで追加表示します。
+      </div>
+    </div>
+
+    <div class="form-check form-switch mb-3">
+      <input class="form-check-input" type="checkbox" id="enableRecentSearches">
+      <label class="form-check-label" for="enableRecentSearches" data-i18n="opt_enableRecentSearches">最近の検索履歴を保存する</label>
+    </div>
+
+    <div class="form-check form-switch mb-3">
+      <input class="form-check-input" type="checkbox" id="showFavicons">
+      <label class="form-check-label" for="showFavicons" data-i18n="opt_showFavicons">ファビコンを表示する</label>
+    </div>
+
     <h4 data-i18n="opt_displaySettings">表示設定</h4>
-  
+
     <div class="mb-4">
       <label class="form-label" data-i18n="opt_themeMode">カラーモード</label>
       <select id="themeMode" class="form-select">
@@ -79,11 +117,10 @@
 
     <div class="mb-4">
       <label class="form-label" data-i18n="opt_language">表示言語</label>
-      <select id="language" class="form-select">
-        <option value="auto" data-i18n="opt_lang_auto">自動（ブラウザに合わせる）</option>
-        <option value="en" data-i18n="opt_lang_en">English</option>
-        <option value="ja" data-i18n="opt_lang_ja">日本語</option>
-      </select>
+      <select id="language" class="form-select"></select>
+      <div class="alert alert-warning py-2 px-3 mt-2 mb-2 small" role="note">
+        <strong>Safety guide (English):</strong> If the UI changes to a language you cannot read, open this Language list, choose <strong>English</strong> (right below <strong>Auto</strong>), then click <strong>Save settings</strong>.
+      </div>
       <div class="form-text" data-i18n="opt_language_note">
         ここで選んだ言語がTadorunのUIに適用されます（自動はChromeの言語に追従）。
       </div>
@@ -100,7 +137,7 @@
         <input type="number" id="popupHeight" class="form-control" min="200" max="1000">
       </div>
     </div>
-  
+
     <hr>
     <button id="saveBtn" class="btn btn-primary" data-i18n="opt_save">設定を保存する</button>
     <button id="resetBtn" class="btn btn-secondary" data-i18n="opt_reset">デフォルトに戻す</button>

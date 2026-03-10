@@ -1,6 +1,6 @@
 {
     "extName": {"message": "Tadorun - ブックマーク＆履歴検索"},
-    "extDesc": {"message": "ブックマークや履歴を AND/OR 条件で検索できます"},
+    "extDesc": {"message": "ブックマーク・履歴・最近閉じたタブを演算子付きで検索"},
     "actionTitle": {"message": "Tadorun を開く"},
 
     "ui_searchTitle": {"message": "検索"},
@@ -19,10 +19,11 @@
     "ui_pageTitle":         { "message": "ブックマーク & 履歴検索" },
     "ui_appName":           { "message": "Tadorun" },
     "ui_openOptionsTitle":  { "message": "設定" },
-    "ui_searchPlaceholder": { "message": "検索ワード（スペース区切り）" },
+    "ui_searchPlaceholder": { "message": "検索ワード（スペース区切り、-word で除外）" },
     "ui_clearTitle":        { "message": "クリア" },
     "ui_filterTitle":       { "message": "フィルター" },
     "ui_filterByDomain":    { "message": "ドメインで絞り込み" },
+    "ui_filterByFolder":    { "message": "フォルダで絞り込み" },
     "ui_tab_all":           { "message": "すべて" },
     "ui_tab_bookmarks":     { "message": "ブックマーク" },
     "ui_tab_history":       { "message": "履歴" },
@@ -40,6 +41,7 @@
     "opt_searchMode": { "message": "検索モード" },
     "opt_searchMode_and": { "message": "AND検索" },
     "opt_searchMode_or": { "message": "OR検索" },
+    "opt_searchMode_regex": { "message": "正規表現検索" },
 
     "opt_searchTarget": { "message": "検索対象" },
     "opt_searchTarget_both": { "message": "ブックマーク + 履歴" },
@@ -62,6 +64,18 @@
     "opt_minQueryLength": { "message": "検索実行に必要な最小文字数" },
     "opt_minQueryLength_note": { "message": "短すぎる検索語はヒット件数が多くなるため、2文字以上を推奨します。" },
 
+    "opt_sortOrder": { "message": "並び順" },
+    "opt_sortOrder_default": { "message": "デフォルト" },
+    "opt_sortOrder_visitCount": { "message": "アクセス数順" },
+    "opt_sortOrder_lastVisit": { "message": "最終アクセス順" },
+    "opt_sortOrder_title": { "message": "タイトル順" },
+
+    "opt_displayLimit": { "message": "1ページの表示件数" },
+    "opt_displayLimit_note": { "message": "「もっと見る」ボタンで追加表示します。" },
+
+    "opt_enableRecentSearches": { "message": "最近の検索履歴を保存する" },
+    "opt_showFavicons": { "message": "ファビコンを表示する" },
+
     "opt_displaySettings": { "message": "表示設定" },
     "opt_themeMode": { "message": "カラーモード" },
     "opt_theme_light": { "message": "ライト" },
@@ -77,7 +91,7 @@
     "opt_saved": { "message": "保存しました！" },
     "opt_reset_done": { "message": "デフォルト値に戻しました！（適用するには「設定を保存する」を押してください）" },
 
-    "opt_err_mode": { "message": "検索モードは「and」または「or」のみです。" },
+    "opt_err_mode": { "message": "検索モードは「and」「or」「regex」のいずれかです。" },
     "opt_err_theme": { "message": "テーマは「auto」「light」「dark」のいずれかです。" },
     "opt_err_target": { "message": "検索対象は「both」「bookmarks」「history」のいずれかです。" },
     "opt_err_size": { "message": "幅と高さは正の数でなければなりません。" },
@@ -98,5 +112,29 @@
     "ui_hoursAgo":         { "message": "$1時間前" },
     "ui_minutesAgo":       { "message": "$1分前" },
     "ui_justNow":          { "message": "たった今" },
-    "ui_usingCache":       { "message": "キャッシュを使用: $1 件 ($2 ms)" }
+    "ui_usingCache":       { "message": "キャッシュを使用: $1 件 ($2 ms)" },
+
+    "opt_groupSameTitle":      { "message": "クエリストリングが異なる同タイトルページをまとめる" },
+    "opt_groupSameTitle_note": { "message": "ホスト名・パスが同じでクエリストリングのみ異なり、タイトルも同じ履歴をひとつにまとめます。表示件数はアクセス数の合計になります。" },
+
+    "ui_sortOrder":        { "message": "並び順:" },
+    "ui_sortDefault":      { "message": "デフォルト" },
+    "ui_sortVisitCount":   { "message": "アクセス数" },
+    "ui_sortLastVisit":    { "message": "最終アクセス" },
+    "ui_sortTitle":        { "message": "タイトル" },
+
+    "ui_loadMore":         { "message": "もっと見る ($1件)" },
+    "ui_copyUrl":          { "message": "URLをコピー" },
+    "ui_copied":           { "message": "コピーしました" },
+    "ui_openTab":          { "message": "開いています" },
+    "ui_recentSearches":   { "message": "最近の検索" },
+    "ui_regexError":       { "message": "正規表現エラー: $1" },
+    "ui_editBookmark":     { "message": "ブックマークを編集" },
+    "ui_deleteBookmark":   { "message": "ブックマークを削除" },
+    "ui_confirmDelete":    { "message": "「$1」を削除しますか？" },
+    "ui_editTitle":        { "message": "タイトル" },
+    "ui_editUrl":          { "message": "URL" },
+    "ui_editSave":         { "message": "保存" },
+    "ui_editCancel":       { "message": "キャンセル" },
+    "ui_recentlyClosed":   { "message": "最近閉じたタブ" }
 }

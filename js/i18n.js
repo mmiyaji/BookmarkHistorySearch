@@ -1,90 +1,88 @@
 const I18N = (() => {
-  const SUPPORTED = ["en", "ja"];
-  const STORAGE_KEY = "langOverride";
-  let currentT = (k, f="") => f || k;
-
-  function normalizeLocale(lang) {
-    if (!lang) return "en";
-    const l = lang.toLowerCase();
-    if (l.startsWith("ja")) return "ja";
-    return "en";
-  }
+  const STORAGE_KEY = LocaleConfig.STORAGE_KEY;
+  let currentT = (key, fallback = "") => fallback || key;
 
   async function getLocale() {
     return new Promise((resolve) => {
       chrome.storage.sync.get({ [STORAGE_KEY]: "auto" }, (cfg) => {
         const override = cfg[STORAGE_KEY];
-        if (override && override !== "auto") return resolve(override);
+        if (override && override !== "auto") {
+          return resolve(LocaleConfig.normalizeLocale(override));
+        }
 
         const langs = navigator.languages?.length
           ? navigator.languages
-          : [navigator.language || "en"];
+          : [navigator.language || LocaleConfig.DEFAULT_LOCALE];
+
         for (const lang of langs) {
-          const norm = normalizeLocale(lang);
-          if (SUPPORTED.includes(norm)) return resolve(norm);
+          const normalized = LocaleConfig.normalizeLocale(lang);
+          if (LocaleConfig.isSupportedLocale(normalized)) {
+            return resolve(normalized);
+          }
         }
-        resolve("en");
+
+        resolve(LocaleConfig.DEFAULT_LOCALE);
       });
     });
   }
 
   async function loadMessages(locale) {
-    const url = chrome.runtime.getURL(`_locales/${locale}/messages.json`);
+    const normalized = LocaleConfig.normalizeLocale(locale);
+    const url = chrome.runtime.getURL(`_locales/${normalized}/messages.json`);
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to load messages: ${locale}`);
+    if (!res.ok) throw new Error(`Failed to load messages: ${normalized}`);
     return res.json();
   }
 
   function makeTranslator(messages) {
-    return function t(key, fallback = "") {
+    return function translate(key, fallback = "") {
       const entry = messages[key];
       return entry && entry.message ? entry.message : fallback || key;
     };
   }
 
-  function applyToDom(t) {
+  function applyToDom(translate) {
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       const key = el.getAttribute("data-i18n");
-      el.textContent = t(key, el.textContent);
+      el.textContent = translate(key, el.textContent);
     });
+
     document.querySelectorAll("[data-i18n-attr]").forEach((el) => {
       const mapStr = el.getAttribute("data-i18n-attr");
       if (!mapStr) return;
+
       mapStr.split(",").forEach((pair) => {
         const [attr, key] = pair.split("=").map((s) => s.trim());
         if (!attr || !key) return;
-        el.setAttribute(attr, t(key, el.getAttribute(attr) || ""));
+        el.setAttribute(attr, translate(key, el.getAttribute(attr) || ""));
       });
     });
   }
 
   async function init() {
     const locale = await getLocale();
-    const messages = await loadMessages(locale).catch(() => loadMessages("en"));
-    const t = makeTranslator(messages);
-    applyToDom(t);
-    currentT = t;
-    return t;
+    const messages = await loadMessages(locale).catch(() => loadMessages(LocaleConfig.DEFAULT_LOCALE));
+    const translate = makeTranslator(messages);
+    applyToDom(translate);
+    currentT = translate;
+    return translate;
   }
 
   async function applyLocale(locale) {
-    let loc = locale;
-    if (!loc || loc === "auto") {
-      loc = await getLocale();
-    } else {
-      // 正規化（ja-JPなどをjaへ）
-      loc = normalizeLocale(loc);
-    }
-    const messages = await loadMessages(loc).catch(() => loadMessages("en"));
-    const t = makeTranslator(messages);
-    applyToDom(t);
-    currentT = t;
-    return t;
+    const resolved = !locale || locale === "auto"
+      ? await getLocale()
+      : LocaleConfig.normalizeLocale(locale);
+
+    const messages = await loadMessages(resolved).catch(() => loadMessages(LocaleConfig.DEFAULT_LOCALE));
+    const translate = makeTranslator(messages);
+    applyToDom(translate);
+    currentT = translate;
+    return translate;
   }
 
-  // 今使っている t を返す（必要なら）
-  function t() { return currentT; }
+  function t() {
+    return currentT;
+  }
 
-  return { init, STORAGE_KEY };
   return { init, applyLocale, STORAGE_KEY, t };
 })();
