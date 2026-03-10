@@ -1,6 +1,6 @@
 {
     "extName": {"message": "Tadorun - ブックマーク＆履歴検索"},
-    "extDesc": {"message": "ブックマークや履歴を AND/OR 条件で検索できます"},
+    "extDesc": {"message": "ブックマーク・履歴・最近閉じたタブを演算子付きで検索"},
     "actionTitle": {"message": "Tadorun を開く"},
 
     "ui_searchTitle": {"message": "検索"},

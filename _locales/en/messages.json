@@ -1,6 +1,6 @@
 {
     "extName": {"message": "Tadorun - Bookmark & History Search"},
-    "extDesc": {"message": "Search bookmarks and/or history with AND/OR logic"},
+    "extDesc": {"message": "Search bookmarks, history, and recently closed tabs with structured filters"},
     "actionTitle": {"message": "Open Tadorun"},
 
     "ui_searchTitle": {"message": "Search"},
