@@ -1062,6 +1062,8 @@ function applyTabVisibility(target) {
 }
 
 function setActiveTab(targetId) {
+  hideRecentSearchesDropdown();
+  hideSavedSearchesDropdown();
   document.querySelectorAll('#resultTabs .nav-link').forEach(btn => {
     const isActive = btn.dataset.target === targetId;
     btn.classList.toggle("active", isActive);
