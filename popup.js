@@ -61,6 +61,7 @@ const selectedIndexMap = { all: -1, bookmarks: -1, history: -1 };
 
 // Feature 5: Recent searches
 let recentSearchSaveTimer = null;
+let suppressEmptyFocusDropdown = false;
 const SAVED_SEARCHES_KEY = 'savedSearches';
 const MAX_SAVED_SEARCHES = 20;
 
@@ -144,6 +145,7 @@ function wireEvents() {
 
   // Feature 5: Show recent searches on focus when empty
   input?.addEventListener("focus", () => {
+    if (suppressEmptyFocusDropdown) return;
     if (input.value.trim() === "") {
       showRecentSearchesDropdown();
       hideSavedSearchesDropdown();
@@ -212,7 +214,9 @@ function wireEvents() {
   document.querySelectorAll('#resultTabs .nav-link').forEach(tab => {
     tab.addEventListener('click', () => {
       setActiveTab(tab.dataset.target);
+      suppressEmptyFocusDropdown = true;
       document.getElementById("searchInput")?.focus();
+      setTimeout(() => { suppressEmptyFocusDropdown = false; }, 0);
     });
   });
 
