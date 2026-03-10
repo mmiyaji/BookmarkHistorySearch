@@ -229,6 +229,10 @@ function wireEvents() {
     });
   }
 
+  document.getElementById("saveSearchBtn")?.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+  });
+
   document.getElementById("saveSearchBtn")?.addEventListener("click", () => {
     const query = document.getElementById("searchInput")?.value.trim() || "";
     if (query) saveCurrentSearch();
