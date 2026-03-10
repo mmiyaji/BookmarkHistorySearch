@@ -25,6 +25,7 @@ chrome.runtime?.onMessage?.addListener((msg) => {
       refreshDocumentLanguage();
       const input = document.getElementById("searchInput");
       if (input) input.setAttribute("placeholder", t("ui_searchPlaceholder", input.getAttribute("placeholder")));
+      updateActionTitles();
       if (document.getElementById("savedSearchesDropdown")?.style.display === "block") showSavedSearchesDropdown();
       runSearch();
     });
@@ -99,6 +100,7 @@ async function bootstrap() {
         input.focus();
         if (input.value.trim() === "") setPopupHeight(200);
       }
+      updateActionTitles();
 
       // Feature 9: Open tabs detection
       ChromeApi.queryTabs({}, (tabs) => {
@@ -110,6 +112,15 @@ async function bootstrap() {
       runSearch();
     }
   );
+}
+
+function updateActionTitles() {
+  const saveSearchBtn = document.getElementById("saveSearchBtn");
+  if (saveSearchBtn) {
+    const title = `${t("ui_saveSearch", "Save search")} (Ctrl/Cmd+S)`;
+    saveSearchBtn.title = title;
+    saveSearchBtn.setAttribute("aria-label", title);
+  }
 }
 
 function wireEvents() {
@@ -145,6 +156,13 @@ function wireEvents() {
   });
 
   input?.addEventListener("keydown", (e) => {
+    const hasPrimaryModifier = e.ctrlKey || e.metaKey;
+    if (hasPrimaryModifier && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      if (e.shiftKey) toggleSavedSearchesDropdown();
+      else saveCurrentSearch();
+      return;
+    }
 
     const tabId = getActiveTabId();
     const items = document.querySelectorAll(`#results-${tabId} li.result-item`);
