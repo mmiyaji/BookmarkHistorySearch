@@ -1,4 +1,4 @@
-﻿const ChromeApi = (() => {
+const ChromeApi = (() => {
   function getSync(keys, callback) {
     chrome.storage.sync.get(keys, callback);
   }
@@ -35,6 +35,10 @@
     chrome.history.search(query, callback);
   }
 
+  function getRecentlyClosed(callback) {
+    chrome.sessions.getRecentlyClosed({ maxResults: 25 }, callback);
+  }
+
   return {
     getSync,
     setSync,
@@ -44,6 +48,7 @@
     getBookmarksTree,
     removeBookmark,
     updateBookmark,
-    searchHistory
+    searchHistory,
+    getRecentlyClosed
   };
 })();

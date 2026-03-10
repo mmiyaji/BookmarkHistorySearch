@@ -135,5 +135,6 @@
     "ui_editTitle":        { "message": "タイトル" },
     "ui_editUrl":          { "message": "URL" },
     "ui_editSave":         { "message": "保存" },
-    "ui_editCancel":       { "message": "キャンセル" }
+    "ui_editCancel":       { "message": "キャンセル" },
+    "ui_recentlyClosed":   { "message": "最近閉じたタブ" }
 }

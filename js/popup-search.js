@@ -227,6 +227,63 @@ const PopupSearch = (() => {
     return Array.from(mergeMap.values());
   }
 
+  function normalizeRecentlyClosedSessions(sessions) {
+    const results = [];
+
+    const pushTab = (tab) => {
+      if (!tab?.url) return;
+
+      let domain = "";
+      try {
+        domain = new URL(tab.url).hostname;
+      } catch {}
+
+      results.push({
+        title: tab.title || "",
+        url: tab.url,
+        domain,
+        site: domain,
+        combined: `${tab.title || ""} ${tab.url} ${domain}`,
+        visitCount: 0,
+        lastVisitTime: Date.now(),
+        isRecentlyClosed: true,
+        sessionId: tab.sessionId || ""
+      });
+    };
+
+    for (const entry of Array.isArray(sessions) ? sessions : []) {
+      if (entry?.tab) {
+        pushTab(entry.tab);
+        continue;
+      }
+      if (entry?.window?.tabs) {
+        for (const tab of entry.window.tabs) pushTab(tab);
+      }
+    }
+
+    return results;
+  }
+
+  function mergeHistoryWithRecentlyClosed(historyItems, recentlyClosedItems) {
+    const merged = new Map();
+
+    for (const item of historyItems) {
+      merged.set(item.url, { ...item, isRecentlyClosed: Boolean(item.isRecentlyClosed) });
+    }
+
+    for (const item of recentlyClosedItems) {
+      const existing = merged.get(item.url);
+      if (existing) {
+        existing.isRecentlyClosed = true;
+        existing.lastVisitTime = Math.max(existing.lastVisitTime || 0, item.lastVisitTime || 0);
+      } else {
+        merged.set(item.url, { ...item });
+      }
+    }
+
+    return Array.from(merged.values());
+  }
+
   function formatElapsedTime(ms, tx, t) {
     const diff = Date.now() - ms;
     const minutes = Math.floor(diff / 60000);
@@ -259,8 +316,10 @@ const PopupSearch = (() => {
     getDomainFacets,
     groupHistoryByUrl,
     highlightKeywords,
+    mergeHistoryWithRecentlyClosed,
     mergeSameTitleHistory,
     normalizeForSearch,
+    normalizeRecentlyClosedSessions,
     sortItems
   };
 })();

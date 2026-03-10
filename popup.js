@@ -50,6 +50,9 @@ let userOptions = {
 let cachedHistory = [];
 let historyCacheTimestamp = 0;
 const HISTORY_CACHE_TTL_MS = 60 * 1000;
+let cachedRecentlyClosed = [];
+let recentlyClosedCacheTimestamp = 0;
+const RECENTLY_CLOSED_CACHE_TTL_MS = 15 * 1000;
 let historyVisitMap = {};
 let currentSearchId = 0;
 let openTabUrls = new Set();
@@ -564,28 +567,35 @@ function runSearch() {
       let grouped = PopupSearch.groupHistoryByUrl(historyResults);
       if (userOptions.groupSameTitle) grouped = PopupSearch.mergeSameTitleHistory(grouped);
 
-      if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
-        ChromeApi.getBookmarksTree((nodes) => {
-          if (thisSearchId !== currentSearchId) return;
+      loadRecentlyClosedOnce((recentlyClosedResults) => {
+        if (thisSearchId !== currentSearchId) return;
 
-          const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
-          const allHistories = PopupSearch.collectHistoryMatches(grouped, matchFn, isSafeUrl);
+        const matchingRecentlyClosed = recentlyClosedResults.filter((item) => matchFn(item));
+        const mergedHistories = PopupSearch.mergeHistoryWithRecentlyClosed(grouped, matchingRecentlyClosed);
 
-          renderDomainFilters(PopupSearch.getDomainFacets([...allBookmarks, ...allHistories]));
-          renderFolderFilters(allBookmarks);
+        if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
+          ChromeApi.getBookmarksTree((nodes) => {
+            if (thisSearchId !== currentSearchId) return;
 
-          const countBookmarks = renderBookmarkItems(allBookmarks, highlightKeywordList, resultsAll, resultsBookmarks);
-          const countHistory   = renderHistoryItems(allHistories, highlightKeywordList, resultsAll, resultsHistory);
-          const countAll = countBookmarks + countHistory;
-          updateBadgeAndMessages(countAll, countBookmarks, countHistory);
-        });
-      } else {
-        const allHistories = PopupSearch.collectHistoryMatches(grouped, matchFn, isSafeUrl);
-        renderDomainFilters(PopupSearch.getDomainFacets(allHistories));
-        renderFolderFilters([]);
-        const countHistory = renderHistoryItems(allHistories, highlightKeywordList, resultsAll, resultsHistory);
-        updateBadgeAndMessages(countHistory, 0, countHistory);
-      }
+            const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
+            const allHistories = PopupSearch.collectHistoryMatches(mergedHistories, matchFn, isSafeUrl);
+
+            renderDomainFilters(PopupSearch.getDomainFacets([...allBookmarks, ...allHistories]));
+            renderFolderFilters(allBookmarks);
+
+            const countBookmarks = renderBookmarkItems(allBookmarks, highlightKeywordList, resultsAll, resultsBookmarks);
+            const countHistory = renderHistoryItems(allHistories, highlightKeywordList, resultsAll, resultsHistory);
+            const countAll = countBookmarks + countHistory;
+            updateBadgeAndMessages(countAll, countBookmarks, countHistory);
+          });
+        } else {
+          const allHistories = PopupSearch.collectHistoryMatches(mergedHistories, matchFn, isSafeUrl);
+          renderDomainFilters(PopupSearch.getDomainFacets(allHistories));
+          renderFolderFilters([]);
+          const countHistory = renderHistoryItems(allHistories, highlightKeywordList, resultsAll, resultsHistory);
+          updateBadgeAndMessages(countHistory, 0, countHistory);
+        }
+      });
     });
   } else if (userOptions.searchTarget === "bookmarks") {
     ChromeApi.getBookmarksTree((nodes) => {
@@ -821,6 +831,13 @@ function createHistoryLi(h, keywords) {
     li.appendChild(favicon);
   }
 
+  if (h.isRecentlyClosed) {
+    const closedBadge = document.createElement("span");
+    closedBadge.className = "badge bg-warning text-dark me-1";
+    closedBadge.textContent = t("ui_recentlyClosed", "Recently closed");
+    li.appendChild(closedBadge);
+  }
+
   // Elapsed time badge
   if (h.lastVisitTime) {
     const elapsedBadge = document.createElement("span");
@@ -978,6 +995,17 @@ function showBookmarkEditForm(li, b) {
   li.appendChild(form);
   titleInput.focus();
   titleInput.select();
+}
+
+function loadRecentlyClosedOnce(callback) {
+  const now = Date.now();
+  const isCacheValid = cachedRecentlyClosed.length > 0 && (now - recentlyClosedCacheTimestamp < RECENTLY_CLOSED_CACHE_TTL_MS);
+  if (isCacheValid) { callback(cachedRecentlyClosed); return; }
+  ChromeApi.getRecentlyClosed((sessions) => {
+    cachedRecentlyClosed = PopupSearch.normalizeRecentlyClosedSessions(sessions).filter((item) => isSafeUrl(item.url));
+    recentlyClosedCacheTimestamp = Date.now();
+    callback(cachedRecentlyClosed);
+  });
 }
 
 function preloadHistory() {

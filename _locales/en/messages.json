@@ -134,5 +134,6 @@
     "ui_editTitle":        { "message": "Title" },
     "ui_editUrl":          { "message": "URL" },
     "ui_editSave":         { "message": "Save" },
-    "ui_editCancel":       { "message": "Cancel" }
+    "ui_editCancel":       { "message": "Cancel" },
+    "ui_recentlyClosed":   { "message": "Recently closed" }
 }
