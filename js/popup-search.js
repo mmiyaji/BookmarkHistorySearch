@@ -1,4 +1,6 @@
-﻿const PopupSearch = (() => {
+const PopupSearch = (() => {
+  const FIELD_PREFIXES = ["site", "title", "url"];
+
   function normalizeForSearch(str) {
     return str
       .normalize("NFKC")
@@ -6,6 +8,59 @@
       .replace(/[\u30a1-\u30f6]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60))
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function parseStructuredToken(token) {
+    const isExclude = token.startsWith("-");
+    const raw = isExclude ? token.slice(1) : token;
+    const colonIndex = raw.indexOf(":");
+    if (colonIndex <= 0) {
+      return { field: "text", value: raw, exclude: isExclude };
+    }
+
+    const field = raw.slice(0, colonIndex);
+    const value = raw.slice(colonIndex + 1);
+    if (!FIELD_PREFIXES.includes(field) || !value) {
+      return { field: "text", value: raw, exclude: isExclude };
+    }
+
+    return { field, value, exclude: isExclude };
+  }
+
+  function buildFieldMatcher(searchMode, includeTokens, excludeTokens) {
+    const normalizedIncludes = includeTokens
+      .map((token) => ({ ...token, value: normalizeForSearch(token.value) }))
+      .filter((token) => token.value);
+    const normalizedExcludes = excludeTokens
+      .map((token) => ({ ...token, value: normalizeForSearch(token.value) }))
+      .filter((token) => token.value);
+
+    const includeKeywords = normalizedIncludes.map((token) => token.value);
+
+    const getFieldValue = (item, field) => {
+      switch (field) {
+        case "title":
+          return normalizeForSearch(item.title || "");
+        case "url":
+          return normalizeForSearch(item.url || "");
+        case "site":
+          return normalizeForSearch(item.site || item.domain || "");
+        default:
+          return normalizeForSearch(item.combined || "");
+      }
+    };
+
+    const tokenMatches = (item, token) => getFieldValue(item, token.field).includes(token.value);
+
+    const fn = (item) => {
+      const includeOk = searchMode === "and"
+        ? normalizedIncludes.every((token) => tokenMatches(item, token))
+        : normalizedIncludes.length === 0 || normalizedIncludes.some((token) => tokenMatches(item, token));
+      const excludeOk = normalizedExcludes.every((token) => !tokenMatches(item, token));
+      return includeOk && excludeOk;
+    };
+
+    return { fn, includeKeywords, excludeKeywords: normalizedExcludes.map((token) => token.value) };
   }
 
   function buildMatchFn(rawQuery, searchMode) {
@@ -16,24 +71,15 @@
       } catch (err) {
         return { fn: null, includeKeywords: [], excludeKeywords: [], error: err.message };
       }
-      return { fn: (text) => regex.test(text), includeKeywords: [], excludeKeywords: [] };
+      return { fn: (item) => regex.test(item.combined || ""), includeKeywords: [], excludeKeywords: [] };
     }
 
     const normalizedQuery = normalizeForSearch(rawQuery);
-    const tokens = normalizedQuery.split(" ").filter(Boolean);
-    const includeKeywords = tokens.filter((k) => !k.startsWith("-"));
-    const excludeKeywords = tokens.filter((k) => k.startsWith("-")).map((k) => k.slice(1)).filter(Boolean);
+    const tokens = normalizedQuery.split(" ").filter(Boolean).map(parseStructuredToken);
+    const includeTokens = tokens.filter((token) => !token.exclude && token.value);
+    const excludeTokens = tokens.filter((token) => token.exclude && token.value);
 
-    const fn = (text) => {
-      const normalized = normalizeForSearch(text);
-      const includeOk = searchMode === "and"
-        ? includeKeywords.every((k) => normalized.includes(k))
-        : includeKeywords.length === 0 || includeKeywords.some((k) => normalized.includes(k));
-      const excludeOk = excludeKeywords.every((k) => !normalized.includes(k));
-      return includeOk && excludeOk;
-    };
-
-    return { fn, includeKeywords, excludeKeywords };
+    return buildFieldMatcher(searchMode, includeTokens, excludeTokens);
   }
 
   function sortItems(items, sortOrder) {
@@ -107,14 +153,29 @@
     }
   }
 
+  function toSearchItem(item) {
+    let domain = "";
+    try {
+      domain = new URL(item.url || "").hostname;
+    } catch {}
+
+    return {
+      title: item.title || "",
+      url: item.url || "",
+      domain,
+      site: domain,
+      combined: `${item.title || ""} ${item.url || ""} ${domain}`
+    };
+  }
+
   function collectBookmarkMatches(nodes, matchFn, isSafeUrl) {
     const all = [];
     collectBookmarks(nodes, all);
-    return all.filter((bookmark) => isSafeUrl(bookmark.url) && matchFn((bookmark.title + " " + bookmark.url).toLowerCase()));
+    return all.filter((bookmark) => isSafeUrl(bookmark.url) && matchFn(toSearchItem(bookmark)));
   }
 
   function collectHistoryMatches(grouped, matchFn, isSafeUrl) {
-    return grouped.filter((historyItem) => isSafeUrl(historyItem.url) && matchFn((historyItem.title + " " + historyItem.url).toLowerCase()));
+    return grouped.filter((historyItem) => isSafeUrl(historyItem.url) && matchFn(toSearchItem(historyItem)));
   }
 
   function buildHistoryVisitMap(results) {
