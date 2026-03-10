@@ -3,6 +3,10 @@
     chrome.storage.sync.get(keys, callback);
   }
 
+  function setSync(data, callback) {
+    chrome.storage.sync.set(data, callback);
+  }
+
   function getLocal(key, callback) {
     chrome.storage.local.get(key, callback);
   }
@@ -33,6 +37,7 @@
 
   return {
     getSync,
+    setSync,
     getLocal,
     setLocal,
     queryTabs,

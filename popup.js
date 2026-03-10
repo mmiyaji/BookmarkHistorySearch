@@ -25,6 +25,7 @@ chrome.runtime?.onMessage?.addListener((msg) => {
       refreshDocumentLanguage();
       const input = document.getElementById("searchInput");
       if (input) input.setAttribute("placeholder", t("ui_searchPlaceholder", input.getAttribute("placeholder")));
+      if (document.getElementById("savedSearchesDropdown")?.style.display === "block") showSavedSearchesDropdown();
       runSearch();
     });
   }
@@ -56,6 +57,8 @@ const selectedIndexMap = { all: -1, bookmarks: -1, history: -1 };
 
 // Feature 5: Recent searches
 let recentSearchSaveTimer = null;
+const SAVED_SEARCHES_KEY = 'savedSearches';
+const MAX_SAVED_SEARCHES = 20;
 
 document.addEventListener("DOMContentLoaded", () => { bootstrap(); });
 
@@ -120,8 +123,8 @@ function wireEvents() {
 
   input?.addEventListener("input", () => {
     hideRecentSearchesDropdown();
+    hideSavedSearchesDropdown();
     debouncedSearch();
-    // Feature 5: Schedule save after typing stops
     scheduleRecentSearchSave(input.value.trim());
   });
 
@@ -129,15 +132,20 @@ function wireEvents() {
   input?.addEventListener("focus", () => {
     if (input.value.trim() === "") {
       showRecentSearchesDropdown();
+      hideSavedSearchesDropdown();
     }
   });
 
   // Hide dropdown on blur (delay for click)
   input?.addEventListener("blur", () => {
-    setTimeout(hideRecentSearchesDropdown, 200);
+    setTimeout(() => {
+      hideRecentSearchesDropdown();
+      hideSavedSearchesDropdown();
+    }, 200);
   });
 
   input?.addEventListener("keydown", (e) => {
+
     const tabId = getActiveTabId();
     const items = document.querySelectorAll(`#results-${tabId} li.result-item`);
     let currentIndex = selectedIndexMap[tabId];
@@ -203,10 +211,17 @@ function wireEvents() {
     });
   }
 
+  document.getElementById("saveSearchBtn")?.addEventListener("click", () => {
+    const query = document.getElementById("searchInput")?.value.trim() || "";
+    if (query) saveCurrentSearch();
+    else toggleSavedSearchesDropdown();
+  });
+
   document.getElementById("clearInputBtn")?.addEventListener("click", () => {
     const input2 = document.getElementById("searchInput");
     input2.value = "";
     input2.focus();
+    hideSavedSearchesDropdown();
     runSearch();
   });
 
@@ -297,6 +312,125 @@ function deleteRecentSearch(query) {
     searches = searches.filter(s => s !== query);
     ChromeApi.setLocal({ recentSearches: searches }, () => {
       showRecentSearchesDropdown();
+    });
+  });
+}
+
+function normalizeSavedSearches(savedSearches) {
+  return Array.isArray(savedSearches)
+    ? savedSearches.filter((item) => item && typeof item.query === "string" && item.query.trim())
+    : [];
+}
+
+function loadSavedSearches(callback) {
+  ChromeApi.getSync([SAVED_SEARCHES_KEY], (data) => {
+    callback(normalizeSavedSearches(data?.[SAVED_SEARCHES_KEY]));
+  });
+}
+
+function setSavedSearchButtonActive(isActive) {
+  document.getElementById("saveSearchBtn")?.classList.toggle("is-active", isActive);
+}
+
+function hideSavedSearchesDropdown() {
+  const dropdown = document.getElementById("savedSearchesDropdown");
+  if (dropdown) dropdown.style.display = "none";
+  setSavedSearchButtonActive(false);
+}
+
+function applySavedSearch(query) {
+  const input = document.getElementById("searchInput");
+  if (!input) return;
+  input.value = query;
+  input.focus();
+  hideSavedSearchesDropdown();
+  runSearch();
+}
+
+function deleteSavedSearch(id) {
+  loadSavedSearches((savedSearches) => {
+    const nextSearches = savedSearches.filter((item) => item.id !== id);
+    ChromeApi.setSync({ [SAVED_SEARCHES_KEY]: nextSearches }, () => {
+      showSavedSearchesDropdown();
+    });
+  });
+}
+
+function showSavedSearchesDropdown() {
+  const dropdown = document.getElementById("savedSearchesDropdown");
+  if (!dropdown) return;
+
+  loadSavedSearches((savedSearches) => {
+    dropdown.innerHTML = "";
+
+    const header = document.createElement("div");
+    header.className = "recent-header";
+    header.textContent = t("ui_savedSearches", "Saved searches");
+    dropdown.appendChild(header);
+
+    if (!savedSearches.length) {
+      const empty = document.createElement("div");
+      empty.className = "recent-item text-muted";
+      empty.textContent = t("ui_noSavedSearches", "No saved searches yet");
+      dropdown.appendChild(empty);
+    }
+
+    savedSearches.forEach((savedSearch) => {
+      const item = document.createElement("div");
+      item.className = "recent-item";
+
+      const span = document.createElement("span");
+      span.className = "recent-text";
+      span.textContent = savedSearch.label || savedSearch.query;
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "recent-del";
+      delBtn.innerHTML = "&times;";
+      delBtn.title = t("ui_deleteSavedSearch", "Delete saved search");
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteSavedSearch(savedSearch.id);
+      });
+
+      item.appendChild(span);
+      item.appendChild(delBtn);
+      item.addEventListener("click", () => applySavedSearch(savedSearch.query));
+      dropdown.appendChild(item);
+    });
+
+    dropdown.style.display = "block";
+    setSavedSearchButtonActive(true);
+  });
+}
+
+function toggleSavedSearchesDropdown() {
+  const dropdown = document.getElementById("savedSearchesDropdown");
+  if (!dropdown) return;
+  if (dropdown.style.display === "block") {
+    hideSavedSearchesDropdown();
+    return;
+  }
+  hideRecentSearchesDropdown();
+  showSavedSearchesDropdown();
+}
+
+function saveCurrentSearch() {
+  const input = document.getElementById("searchInput");
+  const query = input?.value.trim() || "";
+  if (query.length < userOptions.minQueryLength) return;
+
+  loadSavedSearches((savedSearches) => {
+    const nextSearch = {
+      id: String(Date.now()),
+      label: query,
+      query,
+      createdAt: Date.now()
+    };
+    const deduped = savedSearches.filter((item) => item.query !== query);
+    deduped.unshift(nextSearch);
+    const limited = deduped.slice(0, MAX_SAVED_SEARCHES);
+    ChromeApi.setSync({ [SAVED_SEARCHES_KEY]: limited }, () => {
+      showSavedSearchesDropdown();
     });
   });
 }

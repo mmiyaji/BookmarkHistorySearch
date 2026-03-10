@@ -225,7 +225,8 @@ html[data-bs-theme="dark"] .bookmark-edit-form {
 }
 
 /* --- Recent searches dropdown --- */
-#recentSearchesDropdown {
+#recentSearchesDropdown,
+#savedSearchesDropdown {
     position: absolute;
     left: 0;
     right: 0;
@@ -239,14 +240,16 @@ html[data-bs-theme="dark"] .bookmark-edit-form {
     overflow-y: auto;
 }
 
-#recentSearchesDropdown .recent-header {
+#recentSearchesDropdown .recent-header,
+#savedSearchesDropdown .recent-header {
     font-size: 0.75rem;
     color: var(--bs-secondary);
     padding: 4px 10px;
     border-bottom: 1px solid var(--bs-border-color);
 }
 
-#recentSearchesDropdown .recent-item {
+#recentSearchesDropdown .recent-item,
+#savedSearchesDropdown .recent-item {
     display: flex;
     align-items: center;
     padding: 5px 10px;
@@ -254,15 +257,18 @@ html[data-bs-theme="dark"] .bookmark-edit-form {
     font-size: 0.875rem;
 }
 
-#recentSearchesDropdown .recent-item:hover {
+#recentSearchesDropdown .recent-item:hover,
+#savedSearchesDropdown .recent-item:hover {
     background-color: var(--bs-secondary-bg);
 }
 
-#recentSearchesDropdown .recent-item .recent-text {
+#recentSearchesDropdown .recent-item .recent-text,
+#savedSearchesDropdown .recent-item .recent-text {
     flex-grow: 1;
 }
 
-#recentSearchesDropdown .recent-item .recent-del {
+#recentSearchesDropdown .recent-item .recent-del,
+#savedSearchesDropdown .recent-item .recent-del {
     background: none;
     border: none;
     color: var(--bs-secondary);
@@ -272,7 +278,8 @@ html[data-bs-theme="dark"] .bookmark-edit-form {
     opacity: 0.6;
 }
 
-#recentSearchesDropdown .recent-item .recent-del:hover {
+#recentSearchesDropdown .recent-item .recent-del:hover,
+#savedSearchesDropdown .recent-item .recent-del:hover {
     opacity: 1;
     color: var(--bs-danger);
 }
@@ -309,4 +316,9 @@ html[data-bs-theme="dark"] .bookmark-edit-form {
 .search-input-wrapper {
     position: relative;
     flex-grow: 1;
+}
+
+#saveSearchBtn.is-active {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary);
 }
