@@ -66,7 +66,7 @@
 
     "opt_sortOrder": { "message": "Sort order" },
     "opt_sortOrder_default": { "message": "Default" },
-    "opt_sortOrder_visitCount": { "message": "Visit count" },
+    "opt_sortOrder_visitCount": { "message": "Visits in period" },
     "opt_sortOrder_lastVisit": { "message": "Last visited" },
     "opt_sortOrder_title": { "message": "Title" },
 
@@ -118,7 +118,7 @@
 
     "ui_sortOrder":        { "message": "Sort:" },
     "ui_sortDefault":      { "message": "Default" },
-    "ui_sortVisitCount":   { "message": "Visits" },
+    "ui_sortVisitCount":   { "message": "Visits in period" },
     "ui_sortLastVisit":    { "message": "Last visit" },
     "ui_sortTitle":        { "message": "Title" },
 
@@ -135,5 +135,16 @@
     "ui_editUrl":          { "message": "URL" },
     "ui_editSave":         { "message": "Save" },
     "ui_editCancel":       { "message": "Cancel" },
-    "ui_recentlyClosed":   { "message": "Recently closed" }
+    "ui_recentlyClosed":   { "message": "Recently closed" },
+    "ui_saveSearch":       { "message": "Save search" },
+    "ui_savedSearches":    { "message": "Saved searches" },
+    "ui_noSavedSearches":  { "message": "No saved searches yet" },
+    "ui_deleteSavedSearch": { "message": "Delete saved search" },
+    "ui_periodVisitCount": { "message": "$1 visits in period" },
+    "ui_trendingUp":       { "message": "Trending up" },
+    "ui_trendChange":      { "message": "Last 7 days: $1 / Previous 7 days: $2" },
+    "ui_sortTrend":        { "message": "Trending up" },
+    "opt_sortOrder_trend": { "message": "Trending up" },
+    "ui_analyzingHistory": { "message": "Analyzing access history…" },
+    "ui_metricsLimited": { "message": "Visit counts, trends, and last access are based on the $1 URLs that could be analyzed." }
 }

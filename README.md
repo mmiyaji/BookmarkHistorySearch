@@ -16,6 +16,7 @@ Tadorun は、ブックマーク、閲覧履歴、最近閉じたタブを 1 つ
 - Save frequently used searches and reopen them quickly.
 - Switch result tabs with keyboard navigation.
 - Filter results by domain and bookmark folder.
+- Sort by visits within the selected period or by pages trending up over the last seven days.
 - Edit, delete, copy, and open results directly from the popup.
 - Switch UI language between Japanese, English, French, Spanish, German, Italian, Portuguese (Brazil), Chinese, and Korean.
 
@@ -39,6 +40,7 @@ Tadorun は、ブックマーク、閲覧履歴、最近閉じたタブを 1 つ
 - よく使う検索条件を保存してすぐ再利用できます。
 - キーボードで結果移動やタブ切替ができます。
 - ドメインやブックマークフォルダで絞り込みできます。
+- 選択期間内のアクセス数や、直近 7 日で上昇中のページ順に並べ替えできます。
 - ポップアップ上で URL コピー、ブックマーク編集、削除、タブで開く操作ができます。
 - UI 言語は日本語、英語、フランス語、スペイン語、ドイツ語、イタリア語、ポルトガル語（ブラジル）、中国語、韓国語に対応しています。
 

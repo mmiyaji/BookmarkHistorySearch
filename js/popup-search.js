@@ -84,10 +84,38 @@ const PopupSearch = (() => {
 
   function sortItems(items, sortOrder) {
     if (sortOrder === "visitCount") {
-      return [...items].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0));
+      const hasPeriodMetrics = items.some((item) => item.visitMetricsComplete === true || Number.isFinite(item.periodVisitCount));
+      const hasMetricAttempts = items.some((item) => item.visitMetricsAttempted === true);
+      if (!hasPeriodMetrics && !hasMetricAttempts) {
+        return [...items].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0));
+      }
+      return [...items].sort((a, b) => {
+        const aComplete = a.visitMetricsComplete === true || Number.isFinite(a.periodVisitCount);
+        const bComplete = b.visitMetricsComplete === true || Number.isFinite(b.periodVisitCount);
+        const completeDiff = Number(bComplete) - Number(aComplete);
+        if (completeDiff !== 0) return completeDiff;
+        if (!aComplete && !bComplete) return 0;
+        return (b.periodVisitCount || 0) - (a.periodVisitCount || 0);
+      });
+    }
+    if (sortOrder === "trend") {
+      return [...items].sort((a, b) => {
+        const aComplete = a.visitMetricsComplete === true || Number.isFinite(a.trendDelta);
+        const bComplete = b.visitMetricsComplete === true || Number.isFinite(b.trendDelta);
+        const completeDiff = Number(bComplete) - Number(aComplete);
+        if (completeDiff !== 0) return completeDiff;
+        if (!aComplete && !bComplete) return 0;
+        const deltaDiff = (b.trendDelta || 0) - (a.trendDelta || 0);
+        if (deltaDiff !== 0) return deltaDiff;
+        return (b.recentVisitCount || 0) - (a.recentVisitCount || 0);
+      });
     }
     if (sortOrder === "lastVisit") {
-      return [...items].sort((a, b) => (b.lastVisitTime || 0) - (a.lastVisitTime || 0));
+      return [...items].sort((a, b) => {
+        const aTime = a.latestVisitTime || a.lastVisitTime || a.closedAt || 0;
+        const bTime = b.latestVisitTime || b.lastVisitTime || b.closedAt || 0;
+        return bTime - aTime;
+      });
     }
     if (sortOrder === "title") {
       return [...items].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
@@ -181,19 +209,33 @@ const PopupSearch = (() => {
   function buildHistoryVisitMap(results) {
     const visitMap = {};
     for (const item of results) {
-      visitMap[item.url] = (visitMap[item.url] || 0) + item.visitCount;
+      if (!item.url) continue;
+      visitMap[item.url] = (visitMap[item.url] || 0) + (Number(item.visitCount) || 0);
     }
     return visitMap;
+  }
+
+  function buildHistoryMetricsMap(results) {
+    const metricsMap = new Map();
+    for (const item of results) {
+      if (!item.url) continue;
+      metricsMap.set(item.url, {
+        visitCount: Number(item.visitCount) || 0,
+        lastVisitTime: Number(item.lastVisitTime) || 0
+      });
+    }
+    return metricsMap;
   }
 
   function groupHistoryByUrl(results) {
     const grouped = {};
     for (const item of results) {
       const url = item.url;
+      if (!url) continue;
       if (!grouped[url]) {
-        grouped[url] = { ...item };
+        grouped[url] = { ...item, visitCount: Number(item.visitCount) || 0, sourceUrls: [url] };
       } else {
-        grouped[url].visitCount += item.visitCount;
+        grouped[url].visitCount += Number(item.visitCount) || 0;
         if (item.lastVisitTime > grouped[url].lastVisitTime) {
           grouped[url].lastVisitTime = item.lastVisitTime;
         }
@@ -208,16 +250,22 @@ const PopupSearch = (() => {
       let baseKey;
       try {
         const url = new URL(item.url);
-        baseKey = (item.title || "") + "\0" + url.protocol + "//" + url.hostname + url.pathname;
+        // Ignore only the query string. Ports and fragments may identify a
+        // different app/page and therefore remain part of the grouping key.
+        baseKey = (item.title || "") + "\0" + url.origin + url.pathname + url.hash;
       } catch {
         baseKey = (item.title || "") + "\0" + item.url;
       }
 
       const existing = mergeMap.get(baseKey);
       if (!existing) {
-        mergeMap.set(baseKey, { ...item });
+        mergeMap.set(baseKey, { ...item, sourceUrls: [...(item.sourceUrls || [item.url])] });
       } else {
-        existing.visitCount += item.visitCount;
+        existing.visitCount += Number(item.visitCount) || 0;
+        existing.sourceUrls = Array.from(new Set([
+          ...(existing.sourceUrls || [existing.url]),
+          ...(item.sourceUrls || [item.url])
+        ].filter(Boolean)));
         if (item.lastVisitTime > existing.lastVisitTime) {
           existing.lastVisitTime = item.lastVisitTime;
           existing.url = item.url;
@@ -230,7 +278,7 @@ const PopupSearch = (() => {
   function normalizeRecentlyClosedSessions(sessions) {
     const results = [];
 
-    const pushTab = (tab) => {
+    const pushTab = (tab, lastModified) => {
       if (!tab?.url) return;
 
       let domain = "";
@@ -238,6 +286,7 @@ const PopupSearch = (() => {
         domain = new URL(tab.url).hostname;
       } catch {}
 
+      const closedAt = Number(lastModified) > 0 ? Number(lastModified) * 1000 : 0;
       results.push({
         title: tab.title || "",
         url: tab.url,
@@ -245,7 +294,8 @@ const PopupSearch = (() => {
         site: domain,
         combined: `${tab.title || ""} ${tab.url} ${domain}`,
         visitCount: 0,
-        lastVisitTime: Date.now(),
+        lastVisitTime: 0,
+        closedAt,
         isRecentlyClosed: true,
         sessionId: tab.sessionId || ""
       });
@@ -253,11 +303,11 @@ const PopupSearch = (() => {
 
     for (const entry of Array.isArray(sessions) ? sessions : []) {
       if (entry?.tab) {
-        pushTab(entry.tab);
+        pushTab(entry.tab, entry.lastModified);
         continue;
       }
       if (entry?.window?.tabs) {
-        for (const tab of entry.window.tabs) pushTab(tab);
+        for (const tab of entry.window.tabs) pushTab(tab, entry.lastModified);
       }
     }
 
@@ -275,13 +325,63 @@ const PopupSearch = (() => {
       const existing = merged.get(item.url);
       if (existing) {
         existing.isRecentlyClosed = true;
-        existing.lastVisitTime = Math.max(existing.lastVisitTime || 0, item.lastVisitTime || 0);
+        existing.closedAt = Math.max(existing.closedAt || 0, item.closedAt || 0);
+        existing.sessionId = item.sessionId || existing.sessionId || "";
       } else {
         merged.set(item.url, { ...item });
       }
     }
 
-    return Array.from(merged.values());
+    return Array.from(merged.values()).sort((a, b) => {
+      const aActivity = Math.max(a.lastVisitTime || 0, a.closedAt || 0);
+      const bActivity = Math.max(b.lastVisitTime || 0, b.closedAt || 0);
+      return bActivity - aActivity;
+    });
+  }
+
+  function summarizeVisits(visits, nowMs = Date.now(), periodDays = 90) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const parsedPeriodDays = periodDays === "all" ? null : Number(periodDays);
+    const periodStart = Number.isFinite(parsedPeriodDays) && parsedPeriodDays > 0
+      ? nowMs - parsedPeriodDays * dayMs
+      : Number.NEGATIVE_INFINITY;
+    const recentStart = nowMs - 7 * dayMs;
+    const previousStart = nowMs - 14 * dayMs;
+
+    let periodVisitCount = 0;
+    let periodLastVisitTime = 0;
+    let latestVisitTime = 0;
+    let recentVisitCount = 0;
+    let previousVisitCount = 0;
+
+    for (const visit of Array.isArray(visits) ? visits : []) {
+      const visitTime = Number(visit?.visitTime);
+      if (!Number.isFinite(visitTime) || visitTime > nowMs) continue;
+      latestVisitTime = Math.max(latestVisitTime, visitTime);
+
+      if (visitTime >= periodStart) {
+        periodVisitCount += 1;
+        periodLastVisitTime = Math.max(periodLastVisitTime, visitTime);
+      }
+      if (visitTime >= recentStart) {
+        recentVisitCount += 1;
+      } else if (visitTime >= previousStart) {
+        previousVisitCount += 1;
+      }
+    }
+
+    const trendScore = Math.log((recentVisitCount + 1) / (previousVisitCount + 1));
+    return {
+      visitMetricsAttempted: true,
+      visitMetricsComplete: true,
+      periodVisitCount,
+      periodLastVisitTime,
+      latestVisitTime,
+      recentVisitCount,
+      previousVisitCount,
+      trendScore,
+      trendDelta: recentVisitCount - previousVisitCount
+    };
   }
 
   function formatElapsedTime(ms, tx, t) {
@@ -309,6 +409,7 @@ const PopupSearch = (() => {
   return {
     applyOpenTabsPriority,
     buildHistoryVisitMap,
+    buildHistoryMetricsMap,
     buildMatchFn,
     collectBookmarkMatches,
     collectHistoryMatches,
@@ -320,6 +421,7 @@ const PopupSearch = (() => {
     mergeSameTitleHistory,
     normalizeForSearch,
     normalizeRecentlyClosedSessions,
-    sortItems
+    sortItems,
+    summarizeVisits
   };
 })();

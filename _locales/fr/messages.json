@@ -66,7 +66,7 @@
 
   "opt_sortOrder": { "message": "Ordre de tri" },
   "opt_sortOrder_default": { "message": "Par défaut" },
-  "opt_sortOrder_visitCount": { "message": "Nombre de visites" },
+  "opt_sortOrder_visitCount": { "message": "Visites sur la période" },
   "opt_sortOrder_lastVisit": { "message": "Dernière visite" },
   "opt_sortOrder_title": { "message": "Titre" },
 
@@ -118,7 +118,7 @@
 
   "ui_sortOrder": { "message": "Tri :" },
   "ui_sortDefault": { "message": "Par défaut" },
-  "ui_sortVisitCount": { "message": "Visites" },
+  "ui_sortVisitCount": { "message": "Visites sur la période" },
   "ui_sortLastVisit": { "message": "Dernière visite" },
   "ui_sortTitle": { "message": "Titre" },
 
@@ -134,5 +134,17 @@
   "ui_editTitle": { "message": "Titre" },
   "ui_editUrl": { "message": "URL" },
   "ui_editSave": { "message": "Enregistrer" },
-  "ui_editCancel": { "message": "Annuler" }
+  "ui_editCancel": { "message": "Annuler" },
+  "ui_saveSearch": { "message": "Enregistrer la recherche" },
+  "ui_savedSearches": { "message": "Recherches enregistrées" },
+  "ui_noSavedSearches": { "message": "Aucune recherche enregistrée pour le moment" },
+  "ui_deleteSavedSearch": { "message": "Supprimer la recherche enregistrée" },
+  "ui_recentlyClosed": { "message": "Fermé récemment" },
+  "ui_periodVisitCount": { "message": "$1 visites sur la période" },
+  "ui_trendingUp": { "message": "En hausse" },
+  "ui_trendChange": { "message": "7 derniers jours : $1 / 7 jours précédents : $2" },
+  "ui_sortTrend": { "message": "En hausse" },
+  "opt_sortOrder_trend": { "message": "En hausse" },
+  "ui_analyzingHistory": { "message": "Analyse de l’historique des accès…" },
+  "ui_metricsLimited": { "message": "Le nombre de visites, les tendances et le dernier accès reposent sur les $1 URL qui ont pu être analysées." }
 }

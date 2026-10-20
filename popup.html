@@ -24,7 +24,8 @@
         data-i18n-attr="title=ui_sortOrder"
         title="並び順">
         <option value="default" data-i18n="ui_sortDefault">デフォルト</option>
-        <option value="visitCount" data-i18n="ui_sortVisitCount">アクセス数</option>
+        <option value="visitCount" data-i18n="ui_sortVisitCount">期間内アクセス数</option>
+        <option value="trend" data-i18n="ui_sortTrend">上昇中</option>
         <option value="lastVisit" data-i18n="ui_sortLastVisit">最終アクセス</option>
         <option value="title" data-i18n="ui_sortTitle">タイトル</option>
       </select>
@@ -87,6 +88,12 @@
       <div id="folderFilters" class="form-check small mt-1"></div>
     </div>
   </div>
+
+  <div
+    id="metricsNotice"
+    class="small text-muted mb-1 d-none"
+    role="status"
+    aria-live="polite"></div>
 
   <ul class="nav nav-tabs" id="resultTabs">
     <li class="nav-item">

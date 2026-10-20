@@ -1,4 +1,4 @@
-// popup.js (Tadorun) — v2.6 全機能実装版
+// popup.js (Tadorun) — v2.7 全機能実装版
 
 // --- i18n helpers ------------------------------------------------------------
 let t = (k, f) => f || k;
@@ -50,10 +50,21 @@ let userOptions = {
 let cachedHistory = [];
 let historyCacheTimestamp = 0;
 const HISTORY_CACHE_TTL_MS = 60 * 1000;
+let historyLoadInFlight = false;
+let historyLoadCallbacks = [];
 let cachedRecentlyClosed = [];
 let recentlyClosedCacheTimestamp = 0;
 const RECENTLY_CLOSED_CACHE_TTL_MS = 15 * 1000;
-let historyVisitMap = {};
+let recentlyClosedLoadInFlight = false;
+let recentlyClosedLoadCallbacks = [];
+let historyMetricsMap = new Map();
+const historyVisitsCache = new Map();
+const HISTORY_VISITS_CACHE_TTL_MS = 60 * 1000;
+const HISTORY_VISITS_CONCURRENCY = 6;
+const MAX_HISTORY_VISIT_URLS = 200;
+const MAX_HISTORY_VISITS_CACHE_ENTRIES = 500;
+const historyVisitRequestQueue = [];
+let activeHistoryVisitRequests = 0;
 let currentSearchId = 0;
 let openTabUrls = new Set();
 
@@ -108,12 +119,11 @@ async function bootstrap() {
 
       // Feature 9: Open tabs detection
       ChromeApi.queryTabs({}, (tabs) => {
-        openTabUrls = new Set(tabs.map(tab => tab.url).filter(Boolean));
+        openTabUrls = new Set((Array.isArray(tabs) ? tabs : []).map(tab => tab.url).filter(Boolean));
+        runSearch();
       });
 
       wireEvents();
-      preloadHistory();
-      runSearch();
     }
   );
 }
@@ -491,28 +501,17 @@ function isSafeUrl(url) {
 // フォールバック用プレースホルダー（グレーの小さいSVG）
 const FAVICON_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%23ccc'/%3E%3C/svg%3E";
 
-// ① Chrome内蔵キャッシュ → ② サイト自身の /favicon.ico → ③ SVGプレースホルダー
+// Chrome's local favicon cache is used without contacting result websites.
 function applyFavicon(imgEl, url) {
   imgEl.width = 16;
   imgEl.height = 16;
 
-  // ① Chrome内蔵ファビコンキャッシュ（訪問済みサイト・ローカルサイトに有効）
+  // Chrome内蔵ファビコンキャッシュ（訪問済みサイト・ローカルサイトに有効）
   imgEl.src = chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(url)}&size=16`);
 
   imgEl.onerror = function() {
-    // ② サイト自身の favicon.ico を試す（ローカルサイト未訪問でも取得可能）
-    try {
-      const origin = new URL(url).origin;
-      this.src = origin + '/favicon.ico';
-      this.onerror = function() {
-        // ③ 最終フォールバック：SVGプレースホルダー
-        this.src = FAVICON_PLACEHOLDER;
-        this.onerror = null;
-      };
-    } catch {
-      this.src = FAVICON_PLACEHOLDER;
-      this.onerror = null;
-    }
+    this.src = FAVICON_PLACEHOLDER;
+    this.onerror = null;
   };
 }
 
@@ -526,6 +525,7 @@ function runSearch() {
   const resultsBookmarks = document.getElementById("results-bookmarks");
   const resultsHistory = document.getElementById("results-history");
   resultsAll.innerHTML = resultsBookmarks.innerHTML = resultsHistory.innerHTML = "";
+  setHistoryMetricsNotice("");
 
   if (rawQuery === "") {
     ["count-all","count-bookmarks","count-history"].forEach(id => {
@@ -543,7 +543,18 @@ function runSearch() {
   }
 
   if (rawQuery.length < userOptions.minQueryLength) {
-    insertMessageItem(resultsAll, tx("ui_minChars", userOptions.minQueryLength));
+    ["count-all","count-bookmarks","count-history"].forEach(id => {
+      const badge = document.getElementById(id);
+      badge.textContent = "0";
+      badge.style.display = "none";
+    });
+    const message = tx("ui_minChars", userOptions.minQueryLength);
+    insertMessageItem(resultsAll, message);
+    insertMessageItem(resultsBookmarks, message);
+    insertMessageItem(resultsHistory, message);
+    renderDomainFilters({});
+    renderFolderFilters([]);
+    setPopupHeight(200);
     return;
   }
 
@@ -556,111 +567,388 @@ function runSearch() {
   const { fn: matchFn, includeKeywords, error: regexError } = PopupSearch.buildMatchFn(rawQuery, userOptions.searchMode);
 
   if (!matchFn) {
-    insertMessageItem(resultsAll, tx("ui_regexError", regexError || "invalid"));
+    const message = tx("ui_regexError", regexError || "invalid");
+    insertMessageItem(resultsAll, message);
+    insertMessageItem(resultsBookmarks, message);
+    insertMessageItem(resultsHistory, message);
+    ["count-all","count-bookmarks","count-history"].forEach(id => {
+      document.getElementById(id).textContent = "0";
+    });
+    renderDomainFilters({});
+    renderFolderFilters([]);
     return;
   }
+
+  setHistoryMetricsNotice(t("ui_analyzingHistory", "Analyzing access history…"), true);
 
   // Only highlight include keywords (not exclude, not regex)
   const highlightKeywordList = (userOptions.searchMode === "regex") ? [] : (includeKeywords || []);
 
-  if (userOptions.searchTarget === "history" || userOptions.searchTarget === "both") {
-    loadHistoryOnce((historyResults) => {
+  // History is also loaded for bookmark-only searches so bookmark results can
+  // receive accurate period counts and last-visit metrics.
+  loadHistoryOnce((historyResults) => {
+    if (thisSearchId !== currentSearchId) return;
+
+    historyMetricsMap = PopupSearch.buildHistoryMetricsMap(historyResults);
+
+    let grouped = PopupSearch.groupHistoryByUrl(historyResults);
+    if (userOptions.groupSameTitle) grouped = PopupSearch.mergeSameTitleHistory(grouped);
+
+    const continueWithResults = (recentlyClosedResults = []) => {
       if (thisSearchId !== currentSearchId) return;
 
-      historyVisitMap = PopupSearch.buildHistoryVisitMap(historyResults);
-      let grouped = PopupSearch.groupHistoryByUrl(historyResults);
-      if (userOptions.groupSameTitle) grouped = PopupSearch.mergeSameTitleHistory(grouped);
+      const matchingRecentlyClosed = recentlyClosedResults.filter((item) => matchFn(item));
+      const mergedHistories = PopupSearch.mergeHistoryWithRecentlyClosed(grouped, matchingRecentlyClosed);
+      const allHistories = (userOptions.searchTarget === "history" || userOptions.searchTarget === "both")
+        ? PopupSearch.collectHistoryMatches(mergedHistories, matchFn, isSafeUrl)
+        : [];
 
-      loadRecentlyClosedOnce((recentlyClosedResults) => {
-        if (thisSearchId !== currentSearchId) return;
+      if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
+        ChromeApi.getBookmarksTree((nodes) => {
+          if (thisSearchId !== currentSearchId) return;
+          const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
+          finalizeSearchResults(allBookmarks, allHistories, highlightKeywordList, thisSearchId);
+        });
+      } else {
+        finalizeSearchResults([], allHistories, highlightKeywordList, thisSearchId);
+      }
+    };
 
-        const matchingRecentlyClosed = recentlyClosedResults.filter((item) => matchFn(item));
-        const mergedHistories = PopupSearch.mergeHistoryWithRecentlyClosed(grouped, matchingRecentlyClosed);
+    if (userOptions.searchTarget === "history" || userOptions.searchTarget === "both") {
+      loadRecentlyClosedOnce(continueWithResults);
+    } else {
+      continueWithResults();
+    }
+  });
+}
 
-        if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
-          ChromeApi.getBookmarksTree((nodes) => {
-            if (thisSearchId !== currentSearchId) return;
+async function finalizeSearchResults(bookmarks, histories, keywords, searchId) {
+  const decoratedBookmarks = bookmarks.map((bookmark) => {
+    const metrics = historyMetricsMap.get(bookmark.url) || {};
+    return {
+      ...bookmark,
+      resultType: "bookmark",
+      visitMetricsAttempted: true,
+      sourceUrls: [bookmark.url],
+      visitCount: metrics.visitCount || 0,
+      lifetimeVisitCount: metrics.visitCount || 0,
+      lastVisitTime: metrics.lastVisitTime || 0
+    };
+  });
+  const decoratedHistories = histories.map((historyItem) => ({
+    ...historyItem,
+    resultType: "history",
+    visitMetricsAttempted: true,
+    sourceUrls: [...(historyItem.sourceUrls || [historyItem.url])],
+    lifetimeVisitCount: Number(historyItem.visitCount) || 0
+  }));
 
-            const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
-            const allHistories = PopupSearch.collectHistoryMatches(mergedHistories, matchFn, isSafeUrl);
+  renderDomainFilters(PopupSearch.getDomainFacets([...decoratedBookmarks, ...decoratedHistories]));
+  renderFolderFilters(decoratedBookmarks);
+  const selectedBookmarks = filterBookmarkItems(decoratedBookmarks);
+  const selectedHistories = filterHistoryItems(decoratedHistories);
 
-            renderDomainFilters(PopupSearch.getDomainFacets([...allBookmarks, ...allHistories]));
-            renderFolderFilters(allBookmarks);
+  const enriched = await enrichItemsWithVisitMetrics(selectedBookmarks, selectedHistories, () => searchId === currentSearchId);
+  if (searchId !== currentSearchId) return;
 
-            const countBookmarks = renderBookmarkItems(allBookmarks, highlightKeywordList, resultsAll, resultsBookmarks);
-            const countHistory = renderHistoryItems(allHistories, highlightKeywordList, resultsAll, resultsHistory);
-            const countAll = countBookmarks + countHistory;
-            updateBadgeAndMessages(countAll, countBookmarks, countHistory);
-          });
-        } else {
-          const allHistories = PopupSearch.collectHistoryMatches(mergedHistories, matchFn, isSafeUrl);
-          renderDomainFilters(PopupSearch.getDomainFacets(allHistories));
-          renderFolderFilters([]);
-          const countHistory = renderHistoryItems(allHistories, highlightKeywordList, resultsAll, resultsHistory);
-          updateBadgeAndMessages(countHistory, 0, countHistory);
-        }
-      });
+  setHistoryMetricsNotice(
+    enriched.metricsLimited ? tx("ui_metricsLimited", enriched.analyzedUrlCount) : ""
+  );
+
+  const filteredBookmarks = enriched.bookmarks;
+  const filteredHistories = enriched.histories;
+  const resultsAll = document.getElementById("results-all");
+  const resultsBookmarks = document.getElementById("results-bookmarks");
+  const resultsHistory = document.getElementById("results-history");
+
+  renderAllItems(filteredBookmarks, filteredHistories, keywords, resultsAll);
+  renderBookmarkItems(filteredBookmarks, keywords, resultsBookmarks);
+  renderHistoryItems(filteredHistories, keywords, resultsHistory);
+  updateBadgeAndMessages(
+    filteredBookmarks.length + filteredHistories.length,
+    filteredBookmarks.length,
+    filteredHistories.length
+  );
+}
+
+async function enrichItemsWithVisitMetrics(bookmarks, histories, shouldContinue = () => true) {
+  const limit = Math.max(1, userOptions.displayLimit || 50);
+  const desiredItemCount = Math.min(bookmarks.length + histories.length, Math.max(limit * 2, 100));
+  const now = Date.now();
+  const candidates = [];
+  const seenItems = new Set();
+  const addCandidate = (item) => {
+    if (!item || seenItems.has(item) || candidates.length >= desiredItemCount) return;
+    seenItems.add(item);
+    candidates.push(item);
+  };
+
+  const byPreliminaryPriority = (items) => [...items].sort((a, b) => {
+      const openDiff = Number(openTabUrls.has(b.url)) - Number(openTabUrls.has(a.url));
+      if (openDiff !== 0) return openDiff;
+      const countDiff = (b.visitCount || 0) - (a.visitCount || 0);
+      if (countDiff !== 0) return countDiff;
+      return (b.lastVisitTime || b.closedAt || 0) - (a.lastVisitTime || a.closedAt || 0);
     });
-  } else if (userOptions.searchTarget === "bookmarks") {
-    ChromeApi.getBookmarksTree((nodes) => {
-      const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
-      renderDomainFilters(PopupSearch.getDomainFacets(allBookmarks));
-      renderFolderFilters(allBookmarks);
-      const countBookmarks = renderBookmarkItems(allBookmarks, highlightKeywordList, resultsAll, resultsBookmarks);
-      updateBadgeAndMessages(countBookmarks, countBookmarks, 0);
+  const prioritizedBookmarks = byPreliminaryPriority(bookmarks);
+  const prioritizedHistories = byPreliminaryPriority(histories);
+  const getPrimaryOrder = (items, prioritized) => {
+    if (userOptions.sortOrder === "title" || userOptions.sortOrder === "lastVisit") {
+      return PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(items, userOptions.sortOrder), openTabUrls);
+    }
+    if (userOptions.sortOrder === "visitCount" || userOptions.sortOrder === "trend") return prioritized;
+    return PopupSearch.applyOpenTabsPriority(items, openTabUrls);
+  };
+  const primaryBookmarks = getPrimaryOrder(bookmarks, prioritizedBookmarks);
+  const primaryHistories = getPrimaryOrder(histories, prioritizedHistories);
+  for (let index = 0; index < limit; index++) {
+    addCandidate(primaryBookmarks[index]);
+    addCandidate(primaryHistories[index]);
+  }
+
+  const priorityLength = Math.max(prioritizedBookmarks.length, prioritizedHistories.length);
+  for (let index = 0; index < priorityLength && candidates.length < desiredItemCount; index++) {
+    addCandidate(prioritizedBookmarks[index]);
+    addCandidate(prioritizedHistories[index]);
+  }
+
+  const metricUrls = [];
+  const metricUrlSet = new Set();
+  for (const item of candidates) {
+    const urls = Array.from(new Set((item.sourceUrls || [item.url]).filter(isSafeUrl)));
+    if (!urls.length || metricUrls.length + urls.filter((url) => !metricUrlSet.has(url)).length > MAX_HISTORY_VISIT_URLS) {
+      continue;
+    }
+    for (const url of urls) {
+      if (!metricUrlSet.has(url)) {
+        metricUrlSet.add(url);
+        metricUrls.push(url);
+      }
+    }
+  }
+
+  const visitsByUrl = new Map();
+  await mapWithConcurrency(metricUrls, HISTORY_VISITS_CONCURRENCY, async (url) => {
+    visitsByUrl.set(url, await getHistoryVisitsCached(url, shouldContinue));
+  }, shouldContinue);
+
+  if (!shouldContinue()) {
+    return { bookmarks, histories, analyzedUrlCount: 0, metricsLimited: false };
+  }
+
+  let analyzedItemCount = 0;
+  const enrich = (item) => {
+    const sourceUrls = item.sourceUrls || [item.url];
+    if (!sourceUrls.length || sourceUrls.some((url) => !isSafeUrl(url))) return item;
+    const urls = Array.from(new Set(sourceUrls));
+    const visitSets = urls.map((url) => visitsByUrl.get(url));
+    if (visitSets.some((visits) => !Array.isArray(visits))) return item;
+    analyzedItemCount += 1;
+    const visits = visitSets.flat();
+    return { ...item, ...PopupSearch.summarizeVisits(visits, now, userOptions.historyPeriod) };
+  };
+
+  const enrichedBookmarks = bookmarks.map(enrich);
+  const enrichedHistories = histories.map(enrich);
+  const analyzedUrlCount = metricUrls.filter((url) => Array.isArray(visitsByUrl.get(url))).length;
+
+  return {
+    bookmarks: enrichedBookmarks,
+    histories: enrichedHistories,
+    analyzedUrlCount,
+    metricsLimited: analyzedItemCount < bookmarks.length + histories.length
+  };
+}
+
+async function mapWithConcurrency(items, concurrency, worker, shouldContinue = () => true) {
+  let nextIndex = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length && shouldContinue()) {
+      const index = nextIndex++;
+      await worker(items[index]);
+    }
+  });
+  await Promise.all(runners);
+}
+
+function getHistoryVisitsCached(url, shouldContinue = () => true) {
+  const now = Date.now();
+  const cached = historyVisitsCache.get(url);
+  if (cached?.visits && cached.expiresAt > now) return Promise.resolve(cached.visits);
+  if (cached?.promise) {
+    cached.requestState?.consumers.push(shouldContinue);
+    return cached.promise;
+  }
+
+  const requestState = { consumers: [shouldContinue] };
+  const promise = enqueueHistoryVisitRequest(
+    url,
+    () => requestState.consumers.some((consumer) => consumer())
+  ).then((visits) => {
+    if (!Array.isArray(visits)) {
+      historyVisitsCache.delete(url);
+      return null;
+    }
+    historyVisitsCache.set(url, { visits, expiresAt: Date.now() + HISTORY_VISITS_CACHE_TTL_MS });
+    pruneHistoryVisitsCache();
+    return visits;
+  });
+  historyVisitsCache.set(url, { promise, requestState, expiresAt: 0 });
+  return promise;
+}
+
+function enqueueHistoryVisitRequest(url, shouldRun) {
+  return new Promise((resolve) => {
+    for (let index = historyVisitRequestQueue.length - 1; index >= 0; index -= 1) {
+      const queuedRequest = historyVisitRequestQueue[index];
+      if (queuedRequest.shouldRun()) continue;
+      historyVisitRequestQueue.splice(index, 1);
+      queuedRequest.resolve(null);
+    }
+    // Newer searches are placed first; stale queued work is discarded by
+    // shouldRun before it reaches the Chrome API.
+    historyVisitRequestQueue.unshift({ url, resolve, shouldRun });
+    drainHistoryVisitRequestQueue();
+  });
+}
+
+function drainHistoryVisitRequestQueue() {
+  while (activeHistoryVisitRequests < HISTORY_VISITS_CONCURRENCY && historyVisitRequestQueue.length) {
+    const request = historyVisitRequestQueue.shift();
+    if (!request.shouldRun()) {
+      request.resolve(null);
+      continue;
+    }
+    activeHistoryVisitRequests += 1;
+    ChromeApi.getHistoryVisits(request.url, (visits) => {
+      const failed = Boolean(chrome.runtime.lastError);
+      activeHistoryVisitRequests -= 1;
+      request.resolve(failed ? null : (Array.isArray(visits) ? visits : []));
+      drainHistoryVisitRequestQueue();
     });
   }
 }
 
-// Feature 10: DocumentFragment + Features 1,2,4,8,9,11
-function renderBookmarkItems(matched, keywords, resultsAll, resultsBookmarks) {
-  const allowedDomains = getSelectedDomains();
-  const allowedFolders = getSelectedFolders();
-
-  let filtered = matched.filter(b => {
-    let domain;
-    try { domain = new URL(b.url).hostname; } catch { return false; }
-    if (allowedDomains.length && !allowedDomains.includes(domain)) return false;
-    if (allowedFolders.length) {
-      const folderKey = b.folderPath ? b.folderPath.join(" / ") : "";
-      if (!allowedFolders.includes(folderKey)) return false;
+function pruneHistoryVisitsCache() {
+  const now = Date.now();
+  for (const [url, entry] of historyVisitsCache) {
+    if (!entry.promise && entry.expiresAt <= now) historyVisitsCache.delete(url);
+  }
+  while (historyVisitsCache.size > MAX_HISTORY_VISITS_CACHE_ENTRIES) {
+    let removed = false;
+    for (const [url, entry] of historyVisitsCache) {
+      if (entry?.promise) continue;
+      historyVisitsCache.delete(url);
+      removed = true;
+      break;
     }
-    return true;
-  });
-
-  // Feature 1 + 9: Sort then open tabs priority
-  filtered = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(filtered, userOptions.sortOrder), openTabUrls);
-
-  const limit = userOptions.displayLimit || 50;
-  renderBookmarkBatch(filtered, 0, limit, keywords, resultsAll, resultsBookmarks);
-
-  return filtered.length;
+    if (!removed) break;
+  }
 }
 
-function renderBookmarkBatch(items, offset, limit, keywords, resultsAll, resultsBookmarks) {
+function setHistoryMetricsNotice(message, isLoading = false) {
+  const notice = document.getElementById("metricsNotice");
+  if (!notice) return;
+  notice.textContent = message || "";
+  notice.classList.toggle("d-none", !message);
+  notice.setAttribute("aria-busy", isLoading ? "true" : "false");
+}
+
+function getDomainFilterState() {
+  const filters = Array.from(document.querySelectorAll("#domainFilters input[data-domain]"));
+  return { hasFilters: filters.length > 0, selected: new Set(filters.filter((cb) => cb.checked).map((cb) => cb.dataset.domain)) };
+}
+
+function getFolderFilterState() {
+  const filters = Array.from(document.querySelectorAll("#folderFilters input[data-folder]"));
+  return { hasFilters: filters.length > 0, selected: new Set(filters.filter((cb) => cb.checked).map((cb) => cb.dataset.folder)) };
+}
+
+function filterBookmarkItems(items) {
+  const domains = getDomainFilterState();
+  const folders = getFolderFilterState();
+  return items.filter((bookmark) => {
+    let domain;
+    try { domain = new URL(bookmark.url).hostname; } catch { return false; }
+    if (domains.hasFilters && !domains.selected.has(domain)) return false;
+    const folderKey = bookmark.folderPath ? bookmark.folderPath.join(" / ") : "";
+    if (folders.hasFilters && !folders.selected.has(folderKey)) return false;
+    return true;
+  });
+}
+
+function filterHistoryItems(items) {
+  const domains = getDomainFilterState();
+  return items.filter((historyItem) => {
+    let domain;
+    try { domain = new URL(historyItem.url).hostname; } catch { return false; }
+    return !domains.hasFilters || domains.selected.has(domain);
+  });
+}
+
+function renderAllItems(bookmarks, histories, keywords, resultsAll) {
+  const combined = [
+    ...bookmarks.map((item) => ({ ...item, resultType: "bookmark" })),
+    ...histories.map((item) => ({ ...item, resultType: "history" }))
+  ];
+  const sorted = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(combined, userOptions.sortOrder), openTabUrls);
+  renderAllBatch(sorted, 0, userOptions.displayLimit || 50, keywords, resultsAll);
+}
+
+function renderAllBatch(items, offset, limit, keywords, resultsAll) {
   const batch = items.slice(offset, offset + limit);
-  const fragAll = resultsAll ? document.createDocumentFragment() : null;
+  const fragment = document.createDocumentFragment();
+  for (const item of batch) {
+    fragment.appendChild(item.resultType === "bookmark"
+      ? createBookmarkLi(item, keywords)
+      : createHistoryLi(item, keywords));
+  }
+  resultsAll.appendChild(fragment);
+  if (offset + limit < items.length) {
+    addLoadMoreButton(resultsAll, "all", () => {
+      renderAllBatch(items, offset + limit, limit, keywords, resultsAll);
+    }, items.length - offset - limit);
+  }
+}
+
+function renderBookmarkItems(matched, keywords, resultsBookmarks) {
+  const sorted = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(matched, userOptions.sortOrder), openTabUrls);
+  renderBookmarkBatch(sorted, 0, userOptions.displayLimit || 50, keywords, resultsBookmarks);
+}
+
+function renderBookmarkBatch(items, offset, limit, keywords, resultsBookmarks) {
+  const batch = items.slice(offset, offset + limit);
   const fragBm = document.createDocumentFragment();
 
   for (const b of batch) {
-    if (fragAll) fragAll.appendChild(createBookmarkLi(b, keywords));
     fragBm.appendChild(createBookmarkLi(b, keywords));
   }
 
-  if (resultsAll && fragAll) resultsAll.appendChild(fragAll);
   resultsBookmarks.appendChild(fragBm);
 
-  // Feature 2: Load more
   if (offset + limit < items.length) {
     const remaining = items.length - offset - limit;
-    if (resultsAll) {
-      addLoadMoreButton(resultsAll, () => {
-        renderBookmarkBatch(items, offset + limit, limit, keywords, resultsAll, resultsBookmarks);
-      }, remaining);
-    }
-    addLoadMoreButton(resultsBookmarks, () => {
-      renderBookmarkBatch(items, offset + limit, limit, keywords, null, resultsBookmarks);
+    addLoadMoreButton(resultsBookmarks, "bookmarks", () => {
+      renderBookmarkBatch(items, offset + limit, limit, keywords, resultsBookmarks);
     }, remaining);
+  }
+}
+
+function appendVisitMetricBadges(li, item) {
+  const hasPeriodCount = Number.isFinite(item.periodVisitCount);
+  if (hasPeriodCount && item.periodVisitCount > 0) {
+    const vcBadge = document.createElement("span");
+    vcBadge.className = "badge bg-info text-dark me-1";
+    vcBadge.textContent = tx("ui_periodVisitCount", item.periodVisitCount);
+    li.appendChild(vcBadge);
+  }
+
+  if ((item.trendDelta || 0) > 0 && (item.recentVisitCount || 0) >= 2) {
+    const trendBadge = document.createElement("span");
+    trendBadge.className = "badge bg-success me-1";
+    trendBadge.textContent = t("ui_trendingUp", "Trending");
+    trendBadge.title = tx("ui_trendChange", item.recentVisitCount || 0, item.previousVisitCount || 0);
+    li.appendChild(trendBadge);
   }
 }
 
@@ -695,18 +983,11 @@ function createBookmarkLi(b, keywords) {
     li.appendChild(folderBadge);
   }
 
-  // Visit count badge
-  const visitCount = historyVisitMap[url] || 0;
-  if (visitCount > 0) {
-    const vcBadge = document.createElement("span");
-    vcBadge.className = "badge bg-info text-dark me-1";
-    vcBadge.textContent = tx("ui_visitCount", visitCount);
-    li.appendChild(vcBadge);
-  }
+  appendVisitMetricBadges(li, b);
 
   // Title link
   const a = document.createElement("a");
-  a.href = escapeHtml(url);
+  a.href = url;
   a.target = "_blank";
   a.innerHTML = PopupSearch.highlightKeywords(b.title || "", keywords, userOptions.highlight);
   li.appendChild(a);
@@ -741,7 +1022,8 @@ function createBookmarkLi(b, keywords) {
     e.stopPropagation();
     if (confirm(tx("ui_confirmDelete", b.title || url))) {
       ChromeApi.removeBookmark(b.id, () => {
-        li.remove();
+        if (chrome.runtime.lastError) return;
+        runSearch();
       });
     }
   });
@@ -756,7 +1038,7 @@ function createBookmarkLi(b, keywords) {
   // Click to open
   li.addEventListener("click", (e) => {
     if (e.target.tagName.toLowerCase() === "a") return;
-    if (e.target.closest(".item-actions") || e.target.closest(".copy-btn")) return;
+    if (e.target.closest(".item-actions") || e.target.closest(".copy-btn") || e.target.closest(".bookmark-edit-form")) return;
     document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
     li.classList.add("selected");
     window.open(url, "_blank");
@@ -765,49 +1047,25 @@ function createBookmarkLi(b, keywords) {
   return li;
 }
 
-// Feature 10: DocumentFragment + Features 1,2,4,9
-function renderHistoryItems(matched, keywords, resultsAll, resultsHistory) {
-  const allowedDomains = getSelectedDomains();
-
-  let filtered = matched.filter(h => {
-    let domain;
-    try { domain = new URL(h.url).hostname; } catch { return false; }
-    if (allowedDomains.length && !allowedDomains.includes(domain)) return false;
-    return true;
-  });
-
-  // Feature 1 + 9
-  filtered = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(filtered, userOptions.sortOrder), openTabUrls);
-
-  const limit = userOptions.displayLimit || 50;
-  renderHistoryBatch(filtered, 0, limit, keywords, resultsAll, resultsHistory);
-
-  return filtered.length;
+function renderHistoryItems(matched, keywords, resultsHistory) {
+  const sorted = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(matched, userOptions.sortOrder), openTabUrls);
+  renderHistoryBatch(sorted, 0, userOptions.displayLimit || 50, keywords, resultsHistory);
 }
 
-function renderHistoryBatch(items, offset, limit, keywords, resultsAll, resultsHistory) {
+function renderHistoryBatch(items, offset, limit, keywords, resultsHistory) {
   const batch = items.slice(offset, offset + limit);
-  const fragAll = resultsAll ? document.createDocumentFragment() : null;
   const fragHist = document.createDocumentFragment();
 
   for (const h of batch) {
-    if (fragAll) fragAll.appendChild(createHistoryLi(h, keywords));
     fragHist.appendChild(createHistoryLi(h, keywords));
   }
 
-  if (resultsAll && fragAll) resultsAll.appendChild(fragAll);
   resultsHistory.appendChild(fragHist);
 
-  // Feature 2: Load more
   if (offset + limit < items.length) {
     const remaining = items.length - offset - limit;
-    if (resultsAll) {
-      addLoadMoreButton(resultsAll, () => {
-        renderHistoryBatch(items, offset + limit, limit, keywords, resultsAll, resultsHistory);
-      }, remaining);
-    }
-    addLoadMoreButton(resultsHistory, () => {
-      renderHistoryBatch(items, offset + limit, limit, keywords, null, resultsHistory);
+    addLoadMoreButton(resultsHistory, "history", () => {
+      renderHistoryBatch(items, offset + limit, limit, keywords, resultsHistory);
     }, remaining);
   }
 }
@@ -843,24 +1101,19 @@ function createHistoryLi(h, keywords) {
   }
 
   // Elapsed time badge
-  if (h.lastVisitTime) {
+  const activityTime = h.latestVisitTime || h.lastVisitTime || h.closedAt || 0;
+  if (activityTime) {
     const elapsedBadge = document.createElement("span");
     elapsedBadge.className = "badge bg-primary me-1";
-    elapsedBadge.textContent = PopupSearch.formatElapsedTime(h.lastVisitTime, tx, t);
+    elapsedBadge.textContent = PopupSearch.formatElapsedTime(activityTime, tx, t);
     li.appendChild(elapsedBadge);
   }
 
-  // Visit count badge
-  if (h.visitCount > 0) {
-    const vcBadge = document.createElement("span");
-    vcBadge.className = "badge bg-info text-dark me-1";
-    vcBadge.textContent = tx("ui_visitCount", h.visitCount);
-    li.appendChild(vcBadge);
-  }
+  appendVisitMetricBadges(li, h);
 
   // Title link
   const a = document.createElement("a");
-  a.href = escapeHtml(url);
+  a.href = url;
   a.target = "_blank";
   a.innerHTML = PopupSearch.highlightKeywords(h.title || "", keywords, userOptions.highlight);
   li.appendChild(a);
@@ -910,13 +1163,13 @@ function createCopyButton(url) {
 }
 
 // Feature 2: Load more button helper
-function addLoadMoreButton(listElement, onClickFn, remaining) {
-  // Remove existing load-more if any
-  const existing = listElement.querySelector(".load-more-btn");
+function addLoadMoreButton(listElement, key, onClickFn, remaining) {
+  const existing = listElement.querySelector(`.load-more-btn[data-load-more="${key}"]`);
   if (existing) existing.remove();
 
   const btn = document.createElement("button");
   btn.className = "load-more-btn";
+  btn.dataset.loadMore = key;
   btn.textContent = tx("ui_loadMore", remaining);
   btn.addEventListener("click", () => {
     btn.remove();
@@ -964,18 +1217,8 @@ function showBookmarkEditForm(li, b) {
     const newUrl = urlInput.value.trim();
     if (!newTitle || !isSafeUrl(newUrl)) return;
     ChromeApi.updateBookmark(b.id, { title: newTitle, url: newUrl }, () => {
-      b.title = newTitle;
-      b.url = newUrl;
-      // Update displayed content
-      const anchor = li.querySelector("a");
-      if (anchor) {
-        anchor.href = escapeHtml(newUrl);
-        anchor.innerHTML = escapeHtml(newTitle);
-      }
-      const urlDiv = li.querySelector(".url-text");
-      if (urlDiv) { urlDiv.title = newUrl; urlDiv.textContent = newUrl; }
-      li.title = newUrl;
-      form.remove();
+      if (chrome.runtime.lastError) return;
+      runSearch();
     });
   });
 
@@ -1003,40 +1246,51 @@ function showBookmarkEditForm(li, b) {
 
 function loadRecentlyClosedOnce(callback) {
   const now = Date.now();
-  const isCacheValid = cachedRecentlyClosed.length > 0 && (now - recentlyClosedCacheTimestamp < RECENTLY_CLOSED_CACHE_TTL_MS);
+  const isCacheValid = recentlyClosedCacheTimestamp > 0 && (now - recentlyClosedCacheTimestamp < RECENTLY_CLOSED_CACHE_TTL_MS);
   if (isCacheValid) { callback(cachedRecentlyClosed); return; }
-  ChromeApi.getRecentlyClosed((sessions) => {
-    cachedRecentlyClosed = PopupSearch.normalizeRecentlyClosedSessions(sessions).filter((item) => isSafeUrl(item.url));
-    recentlyClosedCacheTimestamp = Date.now();
-    callback(cachedRecentlyClosed);
-  });
-}
 
-function preloadHistory() {
-  const now = Date.now();
-  let startTime = 0;
-  if (userOptions.historyPeriod !== "all") {
-    startTime = now - parseInt(userOptions.historyPeriod) * 24 * 60 * 60 * 1000;
-  }
-  ChromeApi.searchHistory({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
-    cachedHistory = results;
-    historyCacheTimestamp = now;
-    historyVisitMap = PopupSearch.buildHistoryVisitMap(results);
+  recentlyClosedLoadCallbacks.push(callback);
+  if (recentlyClosedLoadInFlight) return;
+  recentlyClosedLoadInFlight = true;
+
+  ChromeApi.getRecentlyClosed((sessions) => {
+    const failed = Boolean(chrome.runtime.lastError);
+    const results = failed
+      ? []
+      : PopupSearch.normalizeRecentlyClosedSessions(sessions).filter((item) => isSafeUrl(item.url));
+    if (!failed) {
+      cachedRecentlyClosed = results;
+      recentlyClosedCacheTimestamp = Date.now();
+    }
+    recentlyClosedLoadInFlight = false;
+    const callbacks = recentlyClosedLoadCallbacks.splice(0);
+    callbacks.forEach((queuedCallback) => queuedCallback(results));
   });
 }
 
 function loadHistoryOnce(callback) {
   const now = Date.now();
-  const isCacheValid = cachedHistory.length > 0 && (now - historyCacheTimestamp < HISTORY_CACHE_TTL_MS);
+  const isCacheValid = historyCacheTimestamp > 0 && (now - historyCacheTimestamp < HISTORY_CACHE_TTL_MS);
   if (isCacheValid) { callback(cachedHistory); return; }
+
+  historyLoadCallbacks.push(callback);
+  if (historyLoadInFlight) return;
+  historyLoadInFlight = true;
+
   let startTime = 0;
   if (userOptions.historyPeriod !== "all") {
     startTime = now - parseInt(userOptions.historyPeriod) * 24 * 60 * 60 * 1000;
   }
   ChromeApi.searchHistory({ text: "", maxResults: userOptions.historyMaxResults, startTime }, (results) => {
-    cachedHistory = results;
-    historyCacheTimestamp = Date.now();
-    callback(results);
+    const failed = Boolean(chrome.runtime.lastError);
+    const safeResults = failed || !Array.isArray(results) ? [] : results;
+    if (!failed) {
+      cachedHistory = safeResults;
+      historyCacheTimestamp = Date.now();
+    }
+    historyLoadInFlight = false;
+    const callbacks = historyLoadCallbacks.splice(0);
+    callbacks.forEach((queuedCallback) => queuedCallback(safeResults));
   });
 }
 
@@ -1135,8 +1389,8 @@ function renderFolderFilters(allBookmarks) {
   `;
   container.appendChild(allDiv);
 
-  sorted.forEach(([folderKey, count]) => {
-    const safeId = "folder-" + folderKey.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+  sorted.forEach(([folderKey, count], index) => {
+    const safeId = `folder-filter-${index}`;
     const div = document.createElement("div");
     div.className = "form-check";
     const isChecked = !uncheckedFolders.has(folderKey);
@@ -1167,11 +1421,6 @@ function renderFolderFilters(allBookmarks) {
   });
 }
 
-function getSelectedFolders() {
-  const filters = document.querySelectorAll("#folderFilters input[data-folder]:checked");
-  return Array.from(filters).map(cb => cb.dataset.folder);
-}
-
 // --- Domain filter -----------------------------------------------------------
 function renderDomainFilters(domainMap) {
   const container = document.getElementById("domainFilters");
@@ -1188,8 +1437,8 @@ function renderDomainFilters(domainMap) {
     <label class="form-check-label" for="filter-all">${t("ui_all")}</label>
   `;
   container.appendChild(all);
-  sorted.forEach(([domain, count]) => {
-    const id = `filter-${domain.replace(/\./g, "_")}`;
+  sorted.forEach(([domain, count], index) => {
+    const id = `domain-filter-${index}`;
     const div = document.createElement("div");
     div.className = "form-check";
     const isChecked = !uncheckedDomains.has(domain);
@@ -1222,9 +1471,4 @@ function updateBadgeAndMessages(countAll, countBookmarks, countHistory) {
   if (countAll === 0)        insertMessageItem(document.getElementById("results-all"),       t("ui_noResults"));
   if (countBookmarks === 0)  insertMessageItem(document.getElementById("results-bookmarks"), t("ui_noResults"));
   if (countHistory === 0)    insertMessageItem(document.getElementById("results-history"),   t("ui_noResults"));
-}
-
-function getSelectedDomains() {
-  const filters = document.querySelectorAll("#domainFilters input[data-domain]:checked");
-  return Array.from(filters).map(cb => cb.dataset.domain);
 }

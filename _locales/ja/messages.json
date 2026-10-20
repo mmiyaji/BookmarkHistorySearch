@@ -66,7 +66,7 @@
 
     "opt_sortOrder": { "message": "並び順" },
     "opt_sortOrder_default": { "message": "デフォルト" },
-    "opt_sortOrder_visitCount": { "message": "アクセス数順" },
+    "opt_sortOrder_visitCount": { "message": "期間内アクセス数順" },
     "opt_sortOrder_lastVisit": { "message": "最終アクセス順" },
     "opt_sortOrder_title": { "message": "タイトル順" },
 
@@ -119,7 +119,7 @@
 
     "ui_sortOrder":        { "message": "並び順:" },
     "ui_sortDefault":      { "message": "デフォルト" },
-    "ui_sortVisitCount":   { "message": "アクセス数" },
+    "ui_sortVisitCount":   { "message": "期間内アクセス数" },
     "ui_sortLastVisit":    { "message": "最終アクセス" },
     "ui_sortTitle":        { "message": "タイトル" },
 
@@ -136,5 +136,16 @@
     "ui_editUrl":          { "message": "URL" },
     "ui_editSave":         { "message": "保存" },
     "ui_editCancel":       { "message": "キャンセル" },
-    "ui_recentlyClosed":   { "message": "最近閉じたタブ" }
+    "ui_recentlyClosed":   { "message": "最近閉じたタブ" },
+    "ui_saveSearch":       { "message": "検索を保存" },
+    "ui_savedSearches":    { "message": "保存済みの検索" },
+    "ui_noSavedSearches":  { "message": "保存済みの検索はありません" },
+    "ui_deleteSavedSearch": { "message": "保存済みの検索を削除" },
+    "ui_periodVisitCount": { "message": "期間内 $1 回" },
+    "ui_trendingUp":       { "message": "上昇中" },
+    "ui_trendChange":      { "message": "直近7日 $1 回／前7日 $2 回" },
+    "ui_sortTrend":        { "message": "上昇中" },
+    "opt_sortOrder_trend": { "message": "上昇中" },
+    "ui_analyzingHistory": { "message": "アクセス履歴を分析しています…" },
+    "ui_metricsLimited": { "message": "アクセス数・上昇傾向・最終アクセスは、分析できた$1件のURLに基づきます。" }
 }

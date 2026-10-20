@@ -18,6 +18,7 @@ Key features:
 - Structured search operators: `site:`, `title:`, `url:`
 - Saved searches and recent searches
 - Domain and folder filters
+- Period visit counts and seven-day trending sort
 - Copy URL, open in a new tab, and inline bookmark edit/delete
 - Multi-language UI
 
@@ -26,6 +27,7 @@ Permissions note:
 - `history`: search browsing history
 - `sessions`: show recently closed tabs
 - `tabs`: detect already open pages
+- `favicon`: show icons from Chrome's local favicon cache
 - `storage`: save settings and searches
 
 ### Suggested Keywords
@@ -49,6 +51,7 @@ Tadorun は、以前見たページを現在のタブを離れずに探すため
 - `site:` `title:` `url:` の検索演算子
 - 保存済み検索と最近の検索
 - ドメイン / フォルダ絞り込み
+- 選択期間内のアクセス数と、直近 7 日の上昇順ソート
 - URL コピー、新規タブで開く、ブックマークの編集 / 削除
 - 多言語 UI
 
@@ -57,6 +60,7 @@ Tadorun は、以前見たページを現在のタブを離れずに探すため
 - `history`: 閲覧履歴の検索
 - `sessions`: 最近閉じたタブの表示
 - `tabs`: すでに開いているページの判定
+- `favicon`: Chrome 内のファビコンキャッシュからアイコンを表示
 - `storage`: 設定と検索条件の保存
 
 ### キーワード案

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "__MSG_extName__",
   "description": "__MSG_extDesc__",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "default_locale": "en",
 
   "permissions": ["storage", "bookmarks", "history", "tabs", "sessions", "favicon"],
@@ -35,19 +35,6 @@
     "page": "options.html",
     "open_in_tab": true
   },
-
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "js/bootstrap.bundle.min.js",
-        "css/bootstrap.min.css",
-        "css/fontawesome.all.min.css",
-        "css/webfonts/*.woff2",
-        "_locales/*/messages.json"
-      ],
-      "matches": ["<all_urls>"]
-    }
-  ],
 
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"

@@ -1,0 +1,11 @@
+{
+  "name": "bookmark-history-search",
+  "version": "2.7.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

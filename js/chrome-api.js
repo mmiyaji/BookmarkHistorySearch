@@ -35,6 +35,10 @@ const ChromeApi = (() => {
     chrome.history.search(query, callback);
   }
 
+  function getHistoryVisits(url, callback) {
+    chrome.history.getVisits({ url }, callback);
+  }
+
   function getRecentlyClosed(callback) {
     chrome.sessions.getRecentlyClosed({ maxResults: 25 }, callback);
   }
@@ -49,6 +53,7 @@ const ChromeApi = (() => {
     removeBookmark,
     updateBookmark,
     searchHistory,
+    getHistoryVisits,
     getRecentlyClosed
   };
 })();

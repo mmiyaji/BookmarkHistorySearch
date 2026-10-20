@@ -1,33 +1,34 @@
 @echo off
 setlocal enabledelayedexpansion
+pushd "%~dp0" || exit /b 1
 
-rem ZIPファイルの名前と出力先
-set VERSION=2.6
+rem Package name and output directory
+set VERSION=2.7
 set ZIP_NAME=BookmarkHistorySearch_%VERSION%.zip
 set OUTPUT_DIR=%~dp0
+set STAGED_ZIP=%~dp0%ZIP_NAME%.tmp.zip
 
-rem 除外するファイル名（完全一致・スペース区切り・引用符なし）
-set EXCLUDE_FILES=.gitignore create_zip.bat
+rem Exact file names to exclude
+set EXCLUDE_FILES=.gitignore create_zip.bat package.json package-lock.json temp_zip
 
-rem 除外するディレクトリ名（スペース区切り・引用符なし）
-set EXCLUDE_DIRS=.git .claude screenshot temp_zip
+rem Directory names to exclude
+set EXCLUDE_DIRS=.git .claude screenshot tests temp_zip .zip_build_2_7
 
-rem 除外する拡張子（ドット付き・スペース区切り・引用符なし）
+rem File extensions to exclude
 set EXCLUDE_EXTS=.zip
 
-rem 一時作業ディレクトリを作成
-set TEMP_DIR=%~dp0temp_zip
-if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
+rem Create an isolated build directory inside this repository
+set TEMP_DIR=%~dp0.zip_build_2_7
+if exist "%TEMP_DIR%\NUL" rmdir /s /q "%TEMP_DIR%"
+if exist "%TEMP_DIR%" goto :fail
 mkdir "%TEMP_DIR%"
+if errorlevel 1 goto :fail
 
-rem 既存のZIPファイルを削除
-if exist "%OUTPUT_DIR%%ZIP_NAME%" (
-    echo ZIPファイルを削除: %OUTPUT_DIR%%ZIP_NAME%
-    del "%OUTPUT_DIR%%ZIP_NAME%"
-)
+rem Preserve the existing package until the replacement is complete
+if exist "%STAGED_ZIP%" del "%STAGED_ZIP%"
 
 echo START FILE COPY
-rem ルート直下のファイルをコピー（除外ファイル・除外拡張子を除く）
+rem Copy root files except excluded names and extensions
 for %%F in (*.*) do (
     set "EXCLUDE=0"
     for %%E in (%EXCLUDE_FILES%) do (
@@ -39,11 +40,12 @@ for %%F in (*.*) do (
     if "!EXCLUDE!"=="0" (
         echo Copying file: %%F
         copy "%%F" "%TEMP_DIR%" >nul
+        if errorlevel 1 goto :fail
     )
 )
 
 echo START DIR COPY
-rem ディレクトリをコピー（除外ディレクトリを除く）
+rem Copy directories except excluded names
 for /d %%D in (*) do (
     set "EXCLUDE=0"
     for %%E in (%EXCLUDE_DIRS%) do (
@@ -52,16 +54,31 @@ for /d %%D in (*) do (
     if "!EXCLUDE!"=="0" (
         echo Copying directory: %%D
         xcopy "%%D" "%TEMP_DIR%\%%D" /s /e /i /q >nul
+        if errorlevel 2 goto :fail
     )
 )
 
 echo START MAKE ZIP
-rem ZIPファイルを作成
-powershell -Command "Compress-Archive -Path '%TEMP_DIR%\*' -DestinationPath '%OUTPUT_DIR%%ZIP_NAME%'"
+rem Build a staged ZIP and replace the previous package only on success
+powershell -NoProfile -Command "Compress-Archive -Path '%TEMP_DIR%\*' -DestinationPath '%STAGED_ZIP%'"
+if errorlevel 1 goto :fail
+if not exist "%STAGED_ZIP%" goto :fail
 
-rem 一時作業ディレクトリを削除
+move /y "%STAGED_ZIP%" "%OUTPUT_DIR%%ZIP_NAME%" >nul
+if errorlevel 1 goto :fail
+
+rem Remove the isolated build directory
 rmdir /s /q "%TEMP_DIR%"
 
-echo ZIPファイルが作成されました: %OUTPUT_DIR%%ZIP_NAME%
+echo ZIP package created: %OUTPUT_DIR%%ZIP_NAME%
+popd
 endlocal
-pause
+exit /b 0
+
+:fail
+echo ZIP package creation failed.
+if exist "%STAGED_ZIP%" del "%STAGED_ZIP%"
+if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
+popd
+endlocal
+exit /b 1
