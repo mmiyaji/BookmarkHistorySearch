@@ -30,7 +30,7 @@ Tadorun は、ブックマーク、閲覧履歴、最近閉じたタブを 1 つ
 - `Enter`: open the selected result
 - `Ctrl/Cmd + S`: save the current search
 - `Ctrl/Cmd + Shift + S`: open saved searches
-- `Tab / Shift + Tab`: switch result tabs
+- `Alt + Left / Right` in the search field: switch result tabs
 
 ## 日本語
 
@@ -54,4 +54,4 @@ Tadorun は、ブックマーク、閲覧履歴、最近閉じたタブを 1 つ
 - `Enter`: 選択中の結果を開く
 - `Ctrl/Cmd + S`: 現在の検索を保存
 - `Ctrl/Cmd + Shift + S`: 保存済み検索を開く
-- `Tab / Shift + Tab`: 結果タブを切り替え
+- 検索欄で `Alt + ← / →`: 結果タブを切り替え

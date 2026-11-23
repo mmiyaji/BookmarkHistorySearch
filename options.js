@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   t = await I18N.init();
   renderLanguageOptions(DEFAULT_SETTINGS.langOverride);
 
-  chrome.storage.sync.get(Object.keys(DEFAULT_SETTINGS), (data) => {
+  ChromeApi.getSync(Object.keys(DEFAULT_SETTINGS), (data) => {
     const merged = { ...DEFAULT_SETTINGS, ...data };
     setFormFields(merged);
   });
@@ -90,7 +90,7 @@ function setFormFields(data) {
   setDocumentLanguage(data.langOverride || DEFAULT_SETTINGS.langOverride);
   renderLanguageOptions(data.langOverride || DEFAULT_SETTINGS.langOverride);
   document.getElementById("sortOrder").value = data.sortOrder || "default";
-  document.getElementById("displayLimit").value = data.displayLimit || 50;
+  document.getElementById("displayLimit").value = DisplayLimit.fromStorage(data.displayLimit);
   document.getElementById("enableRecentSearches").checked = data.enableRecentSearches !== false;
   document.getElementById("showFavicons").checked = data.showFavicons !== false;
   applyTheme(data.theme);
@@ -109,7 +109,12 @@ function onSave() {
   const minQueryLength = Number(document.getElementById("minQueryLength").value);
   const langOverride = document.getElementById("language").value;
   const sortOrder = document.getElementById("sortOrder").value;
-  const displayLimit = Number(document.getElementById("displayLimit").value);
+  const limitInput = document.getElementById("displayLimit");
+  const displayLimit = Number(limitInput.value);
+  if (!DisplayLimit.isValid(displayLimit)) {
+    limitInput.reportValidity();
+    return;
+  }
   const enableRecentSearches = document.getElementById("enableRecentSearches").checked;
   const showFavicons = document.getElementById("showFavicons").checked;
 

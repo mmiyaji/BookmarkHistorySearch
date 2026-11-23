@@ -9,7 +9,8 @@ function setDocumentLanguage(locale) {
 }
 
 function refreshDocumentLanguage() {
-  ChromeApi.getSync([LocaleConfig.STORAGE_KEY], (data) => {
+  ChromeApi.getSync([LocaleConfig.STORAGE_KEY], (data, error) => {
+    if (error) return setDocumentLanguage(LocaleConfig.DEFAULT_LOCALE);
     const override = data?.[LocaleConfig.STORAGE_KEY];
     const locale = (!override || override === "auto")
       ? (navigator.languages?.[0] || navigator.language || LocaleConfig.DEFAULT_LOCALE)
@@ -97,7 +98,7 @@ async function bootstrap() {
         popupHeight: parseInt(data.popupHeight) || 600,
         popupWidth: parseInt(data.popupWidth) || 500,
         sortOrder: data.sortOrder || "default",
-        displayLimit: parseInt(data.displayLimit) || 50,
+        displayLimit: DisplayLimit.fromStorage(data.displayLimit),
         enableRecentSearches: data.enableRecentSearches !== false,
         showFavicons: data.showFavicons !== false
       };
@@ -171,6 +172,16 @@ function wireEvents() {
   });
 
   input?.addEventListener("keydown", (e) => {
+    if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      const tabs = Array.from(document.querySelectorAll("#resultTabs .nav-link"))
+        .filter((tab) => tab.offsetParent !== null);
+      if (tabs.length < 2) return;
+      e.preventDefault();
+      const current = tabs.findIndex((tab) => tab.classList.contains("active"));
+      const step = e.key === "ArrowLeft" ? -1 : 1;
+      tabs[(current + step + tabs.length) % tabs.length].click();
+      return;
+    }
     const hasPrimaryModifier = e.ctrlKey || e.metaKey;
     if (hasPrimaryModifier && e.key.toLowerCase() === "s") {
       e.preventDefault();
@@ -207,19 +218,6 @@ function wireEvents() {
   });
 
   if (input && input.value.trim() === "") setPopupHeight(200);
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Tab") return;
-    const tabButtons = Array.from(document.querySelectorAll('#resultTabs .nav-link'))
-      .filter(btn => btn.offsetParent !== null);
-    if (!tabButtons.length) return;
-    e.preventDefault();
-    const currentIndex = tabButtons.findIndex(btn => btn.classList.contains("active"));
-    const nextIndex = e.shiftKey
-      ? (currentIndex - 1 + tabButtons.length) % tabButtons.length
-      : (currentIndex + 1) % tabButtons.length;
-    tabButtons[nextIndex].click();
-  });
 
   document.querySelectorAll('#resultTabs .nav-link').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -282,7 +280,8 @@ function scheduleRecentSearchSave(query) {
 
 function saveRecentSearch(query) {
   if (!userOptions.enableRecentSearches || !query) return;
-  ChromeApi.getLocal("recentSearches", (data) => {
+  ChromeApi.getLocal("recentSearches", (data, error) => {
+    if (error) return;
     let searches = Array.isArray(data.recentSearches) ? data.recentSearches : [];
     searches = searches.filter(s => s !== query);
     searches.unshift(query);
@@ -346,7 +345,8 @@ function hideRecentSearchesDropdown() {
 }
 
 function deleteRecentSearch(query) {
-  ChromeApi.getLocal("recentSearches", (data) => {
+  ChromeApi.getLocal("recentSearches", (data, error) => {
+    if (error) return;
     let searches = Array.isArray(data.recentSearches) ? data.recentSearches : [];
     searches = searches.filter(s => s !== query);
     ChromeApi.setLocal({ recentSearches: searches }, () => {
@@ -362,7 +362,8 @@ function normalizeSavedSearches(savedSearches) {
 }
 
 function loadSavedSearches(callback) {
-  ChromeApi.getSync([SAVED_SEARCHES_KEY], (data) => {
+  ChromeApi.getSync([SAVED_SEARCHES_KEY], (data, error) => {
+    if (error) return;
     callback(normalizeSavedSearches(data?.[SAVED_SEARCHES_KEY]));
   });
 }
@@ -591,17 +592,15 @@ function runSearch() {
 
     historyMetricsMap = PopupSearch.buildHistoryMetricsMap(historyResults);
 
-    let grouped = PopupSearch.groupHistoryByUrl(historyResults);
-    if (userOptions.groupSameTitle) grouped = PopupSearch.mergeSameTitleHistory(grouped);
-
     const continueWithResults = (recentlyClosedResults = []) => {
       if (thisSearchId !== currentSearchId) return;
 
-      const matchingRecentlyClosed = recentlyClosedResults.filter((item) => matchFn(item));
-      const mergedHistories = PopupSearch.mergeHistoryWithRecentlyClosed(grouped, matchingRecentlyClosed);
-      const allHistories = (userOptions.searchTarget === "history" || userOptions.searchTarget === "both")
-        ? PopupSearch.collectHistoryMatches(mergedHistories, matchFn, isSafeUrl)
-        : [];
+      let allHistories = [];
+      if (userOptions.searchTarget !== "bookmarks") {
+        const matching = PopupSearch.collectHistoryMatches(PopupSearch.groupHistoryByUrl(historyResults), matchFn, isSafeUrl);
+        const grouped = userOptions.groupSameTitle ? PopupSearch.mergeSameTitleHistory(matching) : matching;
+        allHistories = PopupSearch.mergeHistoryWithRecentlyClosed(grouped, recentlyClosedResults.filter(matchFn));
+      }
 
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
         ChromeApi.getBookmarksTree((nodes) => {

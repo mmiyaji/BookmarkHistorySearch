@@ -401,3 +401,25 @@ test("mergeHistoryWithRecentlyClosed keeps visit time and close time as separate
   assert.equal(merged.sessionId, "recent-session");
   assert.equal(merged.isRecentlyClosed, true);
 });
+
+test("regex complexity checks distinguish literal characters from quantifiers", () => {
+  for (const pattern of [String.raw`([+])+`, String.raw`(\+)+`, String.raw`([\]*])+`]) {
+    const { fn } = PopupSearch.buildMatchFn(pattern, "regex");
+    assert.equal(typeof fn, "function", pattern);
+    assert.equal(fn(searchItem({ title: "++**" })), true);
+  }
+  assert.equal(PopupSearch.buildMatchFn("([a-z]+)+", "regex").fn, null);
+});
+
+test("matched Unicode keywords highlight the corresponding original text", () => {
+  for (const [original, query] of [
+    ["한글", "한글"], ["ΟΣ", "ος"], ["ㅎㅏ", "하"], ["İ", "i\u0307"], ["ﾊﾞ", "ば"]
+  ]) {
+    const title = "  <" + original + "> ABC";
+    const { fn, includeKeywords } = PopupSearch.buildMatchFn(query + " abc", "and");
+    assert.equal(fn(searchItem({ title })), true, query);
+    assert.equal(PopupSearch.highlightKeywords(title, includeKeywords, true),
+      "  &lt;<mark>" + original + "</mark>&gt; <mark>ABC</mark>");
+  }
+  assert.equal(PopupSearch.highlightKeywords(" A \t B ", ["a b"], true), " <mark>A \t B</mark> ");
+});
