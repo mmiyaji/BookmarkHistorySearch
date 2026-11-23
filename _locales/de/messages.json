@@ -117,6 +117,7 @@
   "ui_savedSearches": { "message": "Gespeicherte Suchen" },
   "ui_noSavedSearches": { "message": "Noch keine Suchen gespeichert" },
   "ui_deleteSavedSearch": { "message": "Gespeicherte Suche löschen" },
+  "ui_bookmarked": { "message": "Als Lesezeichen gespeichert" },
   "ui_recentlyClosed": { "message": "Kürzlich geschlossen" },
   "ui_periodVisitCount": { "message": "$1 Besuche im Zeitraum" },
   "ui_trendingUp": { "message": "Im Aufwärtstrend" },

@@ -117,6 +117,7 @@
   "ui_savedSearches": { "message": "Pesquisas salvas" },
   "ui_noSavedSearches": { "message": "Ainda não há pesquisas salvas" },
   "ui_deleteSavedSearch": { "message": "Excluir pesquisa salva" },
+  "ui_bookmarked": { "message": "Salvo nos favoritos" },
   "ui_recentlyClosed": { "message": "Fechado recentemente" },
   "ui_periodVisitCount": { "message": "$1 visitas no período" },
   "ui_trendingUp": { "message": "Em alta" },

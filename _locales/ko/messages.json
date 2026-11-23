@@ -117,6 +117,7 @@
   "ui_savedSearches": { "message": "저장된 검색" },
   "ui_noSavedSearches": { "message": "저장된 검색이 없습니다" },
   "ui_deleteSavedSearch": { "message": "저장된 검색 삭제" },
+  "ui_bookmarked": { "message": "북마크에 저장됨" },
   "ui_recentlyClosed": { "message": "최근에 닫은 탭" },
   "ui_periodVisitCount": { "message": "기간 내 $1회 방문" },
   "ui_trendingUp": { "message": "상승 중" },

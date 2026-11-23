@@ -136,6 +136,7 @@
     "ui_editUrl":          { "message": "URL" },
     "ui_editSave":         { "message": "保存" },
     "ui_editCancel":       { "message": "キャンセル" },
+    "ui_bookmarked": { "message": "ブックマーク済み" },
     "ui_recentlyClosed":   { "message": "最近閉じたタブ" },
     "ui_saveSearch":       { "message": "検索を保存" },
     "ui_savedSearches":    { "message": "保存済みの検索" },

@@ -25,6 +25,29 @@ function loadPopupSearch() {
 
 const PopupSearch = loadPopupSearch();
 
+test("combined results retain the matching bookmark identity and use history metrics only once", () => {
+  const url = "https://example.test/doc";
+  const nodes = [{ title: "Folder", children: [
+    { id: "a", url, title: "Saved guide" },
+    { id: "b", url, title: "Saved copy" },
+    { id: "c", url: url + "?v=1", title: "Manual" }
+  ] }];
+  const { matches, urls } = PopupSearch.findBookmarkResults(nodes, item => item.title.includes("Saved"), () => true);
+  const history = { url, title: "Visited guide", periodVisitCount: 7, trendDelta: 3 };
+  const other = { url: url + "?v=1", title: "Saved edition", periodVisitCount: 8 };
+  const rows = PopupSearch.combineResultsByUrl(matches, [history, other], urls);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].bookmark.id, "a");
+  assert.equal(rows[0].periodVisitCount, 7);
+  assert.equal(rows[0].trendDelta, 3);
+  assert.equal(PopupSearch.sortItems(rows, "visitCount")[0].url, other.url);
+  assert.equal(rows[1].isBookmarked, true);
+  assert.equal(rows[1].bookmark, undefined);
+  const [filtered] = PopupSearch.combineResultsByUrl([matches[1]], [history], urls);
+  assert.equal(filtered.bookmark.id, "b");
+  assert.equal(history.title, "Visited guide");
+});
+
 function searchItem({ title = "", url = "", site = "" } = {}) {
   return {
     title,

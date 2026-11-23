@@ -135,6 +135,7 @@
     "ui_editUrl":          { "message": "URL" },
     "ui_editSave":         { "message": "Save" },
     "ui_editCancel":       { "message": "Cancel" },
+    "ui_bookmarked": { "message": "Bookmarked" },
     "ui_recentlyClosed":   { "message": "Recently closed" },
     "ui_saveSearch":       { "message": "Save search" },
     "ui_savedSearches":    { "message": "Saved searches" },

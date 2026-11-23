@@ -117,6 +117,7 @@
   "ui_savedSearches": { "message": "已保存的搜索" },
   "ui_noSavedSearches": { "message": "暂无已保存的搜索" },
   "ui_deleteSavedSearch": { "message": "删除已保存的搜索" },
+  "ui_bookmarked": { "message": "已添加书签" },
   "ui_recentlyClosed": { "message": "最近关闭的标签页" },
   "ui_periodVisitCount": { "message": "时段内访问 $1 次" },
   "ui_trendingUp": { "message": "上升中" },

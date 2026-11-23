@@ -208,6 +208,7 @@ function loadPopup() {
       + `  createBookmarkLi,\n`
       + `  createHistoryLi,\n`
       + `  enrichItemsWithVisitMetrics,\n`
+      + `  finalizeSearchResults,\n`
       + `  filterBookmarkItems,\n`
       + `  filterHistoryItems,\n`
       + `  sortItems: PopupSearch.sortItems,\n`
@@ -221,7 +222,7 @@ function loadPopup() {
     highlight: false,
     showFavicons: false
   });
-  return { api: context.__popupForTests, chrome, chromeApi, document };
+  return { api: context.__popupForTests, chrome, chromeApi, document, context };
 }
 
 function checkbox(dataset, checked = false) {
@@ -320,6 +321,50 @@ test("filterHistoryItems returns no history when every domain is unchecked", () 
     title: "History",
     url: "https://example.test/page"
   }]).length, 0);
+});
+
+test("All paginates exact URLs and counts merged rows while source tabs retain their entries", async () => {
+  const { api, document, chromeApi, context } = loadPopup();
+  vm.runInContext("renderDomainFilters = counts => globalThis.domainCounts = counts; renderFolderFilters = () => {};", context);
+  const elements = new Map();
+  for (const tab of ["all", "bookmarks", "history"]) {
+    elements.set("results-" + tab, document.createElement("ul"));
+    elements.set("count-" + tab, document.createElement("span"));
+  }
+  document.getElementById = (id) => elements.get(id) || null;
+  chromeApi.getHistoryVisits = (_, cb) => cb([{ visitTime: Date.now() - 1000 }]);
+  api.setOptions({ displayLimit: 10 });
+  const url = "https://example.test/doc";
+  const bookmarks = [
+    { id: "first", url, title: "Saved title", folderPath: ["Work"] },
+    { id: "second", url, title: "Other copy", folderPath: ["Archive"] },
+    { id: "only", url: url + "#intro", title: "Intro" }
+  ];
+  const histories = [
+    { url, title: "Visited title", isRecentlyClosed: true },
+    ...Array.from({ length: 10 }, (_, index) => ({ url: url + "?id=" + index, title: "History " + index }))
+  ];
+  const savedUrls = new Set([url, url + "#intro", url + "?id=9"]);
+  await api.finalizeSearchResults(bookmarks, histories, [], 0, savedUrls);
+  const list = elements.get("results-all");
+  const rows = () => list.children.filter(el => el.classList.contains("result-item"));
+  const marked = row => row.children[1].children.some(el => el.getAttribute("aria-label") === "Bookmarked");
+  assert.equal(context.domainCounts["example.test"], 12);
+  assert.deepEqual(["all", "bookmarks", "history"].map(tab => elements.get("count-" + tab).textContent), [12, 3, 11]);
+  assert.equal(rows().length, 10);
+  const [shared, onlyBookmark, onlyHistory] = rows();
+  const link = shared.querySelector("a");
+  assert.equal(link.textContent || link.innerHTML, "Saved title");
+  assert.ok(marked(shared) && marked(onlyBookmark));
+  assert.equal(marked(onlyHistory), false);
+  assert.ok(shared.children[2].children.some(el => el.classList.contains("edit-btn")));
+  assert.ok(shared.children[1].children.some(el => el.classList.contains("bg-warning")));
+  assert.equal(shared.children[1].children.filter(el => el.classList.contains("bg-info")).length, 1);
+  list.querySelector('.load-more-btn[data-load-more="all"]').dispatchEvent({ type: "click" });
+  assert.equal(rows().length, 12);
+  assert.equal(new Set(rows().map(row => row.querySelector("a").href)).size, 12);
+  assert.ok(marked(rows().at(-1)), "matching history still shows the saved state when only its history title matched");
+  assert.equal(list.querySelector('.load-more-btn[data-load-more="all"]'), null);
 });
 
 test("addLoadMoreButton replaces only the existing button with the same key", () => {

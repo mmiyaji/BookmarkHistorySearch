@@ -243,10 +243,32 @@ const PopupSearch = (() => {
     };
   }
 
-  function collectBookmarkMatches(nodes, matchFn, isSafeUrl) {
+  function findBookmarkResults(nodes, matchFn, isSafeUrl) {
     const all = [];
     collectBookmarks(nodes, all);
-    return all.filter((bookmark) => isSafeUrl(bookmark.url) && matchFn(toSearchItem(bookmark)));
+    return {
+      matches: all.filter((bookmark) => isSafeUrl(bookmark.url) && matchFn(toSearchItem(bookmark))),
+      urls: new Set(all.map((bookmark) => bookmark.url))
+    };
+  }
+
+  function combineResultsByUrl(bookmarks, histories, bookmarkedUrls) {
+    const rows = new Map();
+    for (const bookmark of bookmarks) {
+      if (!rows.has(bookmark.url)) {
+        rows.set(bookmark.url, { ...bookmark, bookmark, isBookmarked: true });
+      }
+    }
+    for (const history of histories) {
+      const bookmark = rows.get(history.url)?.bookmark;
+      rows.set(history.url, {
+        ...history,
+        title: bookmark?.title || history.title,
+        bookmark,
+        isBookmarked: Boolean(bookmark) || bookmarkedUrls.has(history.url)
+      });
+    }
+    return Array.from(rows.values());
   }
 
   function collectHistoryMatches(grouped, matchFn, isSafeUrl) {
@@ -442,11 +464,11 @@ const PopupSearch = (() => {
     return t("ui_justNow");
   }
 
-  function getDomainFacets(results) {
+  function getDomainFacets(urls) {
     const countMap = {};
-    for (const item of results) {
+    for (const url of urls) {
       try {
-        const domain = new URL(item.url).hostname;
+        const domain = new URL(url).hostname;
         countMap[domain] = (countMap[domain] || 0) + 1;
       } catch {}
     }
@@ -458,7 +480,8 @@ const PopupSearch = (() => {
     buildHistoryVisitMap,
     buildHistoryMetricsMap,
     buildMatchFn,
-    collectBookmarkMatches,
+    combineResultsByUrl,
+    findBookmarkResults,
     collectHistoryMatches,
     formatElapsedTime,
     getDomainFacets,
