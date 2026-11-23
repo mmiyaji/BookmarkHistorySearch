@@ -951,58 +951,69 @@ function appendVisitMetricBadges(li, item) {
   }
 }
 
-function createBookmarkLi(b, keywords) {
+function createResultRow(item, keywords) {
+  const { url } = item;
+  const title = item.title || url;
   const li = document.createElement("li");
   li.className = "list-group-item result-item";
+  li.title = url;
 
-  const url = b.url;
-  const isOpen = openTabUrls.has(url);
+  const link = document.createElement("a");
+  link.className = "result-title";
+  link.href = url;
+  link.target = "_blank";
+  link.innerHTML = PopupSearch.highlightKeywords(title, keywords, userOptions.highlight);
+  li.appendChild(link);
 
-  // Feature 9: Open tab badge
-  if (isOpen) {
+  const details = document.createElement("div");
+  details.className = "result-details";
+  li.appendChild(details);
+  if (userOptions.showFavicons) {
+    const favicon = document.createElement("img");
+    favicon.alt = "";
+    applyFavicon(favicon, url);
+    details.appendChild(favicon);
+  }
+  if (title !== url) {
+    const urlText = document.createElement("span");
+    urlText.className = "url-text text-muted";
+    urlText.title = url;
+    urlText.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
+    details.appendChild(urlText);
+  }
+  if (openTabUrls.has(url)) {
     const openBadge = document.createElement("span");
     openBadge.className = "open-tab-badge";
     openBadge.textContent = t("ui_openTab");
-    li.appendChild(openBadge);
+    details.appendChild(openBadge);
   }
 
-  // Favicon
-  if (userOptions.showFavicons) {
-    const favicon = document.createElement("img");
-    favicon.className = "me-1";
-    applyFavicon(favicon, url);
-    li.appendChild(favicon);
-  }
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  li.appendChild(actions);
+  li.addEventListener("click", (e) => {
+    if (e.target.closest("a, .item-actions, .bookmark-edit-form")) return;
+    document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
+    li.classList.add("selected");
+    window.open(url, "_blank");
+  });
+  return { li, details, actions };
+}
+
+function createBookmarkLi(b, keywords) {
+  const { li, details, actions } = createResultRow(b, keywords);
+  const url = b.url;
 
   // Folder badge
   if (b.folderPath && b.folderPath.length) {
     const folderBadge = document.createElement("span");
     folderBadge.className = "badge bg-secondary me-1";
     folderBadge.textContent = "📁 " + b.folderPath.join(" / ");
-    li.appendChild(folderBadge);
+    folderBadge.title = folderBadge.textContent;
+    details.appendChild(folderBadge);
   }
 
-  appendVisitMetricBadges(li, b);
-
-  // Title link
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.innerHTML = PopupSearch.highlightKeywords(b.title || "", keywords, userOptions.highlight);
-  li.appendChild(a);
-
-  // URL display
-  const urlDiv = document.createElement("div");
-  urlDiv.className = "url-text text-muted small ms-4";
-  urlDiv.title = url;
-  urlDiv.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
-  li.appendChild(urlDiv);
-
-  li.title = url;
-
-  // Feature 8: Edit/Delete buttons
-  const actionsDiv = document.createElement("div");
-  actionsDiv.className = "item-actions";
+  appendVisitMetricBadges(details, b);
 
   const editBtn = document.createElement("button");
   editBtn.className = "edit-btn";
@@ -1027,22 +1038,9 @@ function createBookmarkLi(b, keywords) {
     }
   });
 
-  actionsDiv.appendChild(editBtn);
-  actionsDiv.appendChild(deleteBtn);
-  li.appendChild(actionsDiv);
-
-  // Feature 4: Copy button
-  li.appendChild(createCopyButton(url));
-
-  // Click to open
-  li.addEventListener("click", (e) => {
-    if (e.target.tagName.toLowerCase() === "a") return;
-    if (e.target.closest(".item-actions") || e.target.closest(".copy-btn") || e.target.closest(".bookmark-edit-form")) return;
-    document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
-    li.classList.add("selected");
-    window.open(url, "_blank");
-  });
-
+  actions.appendChild(editBtn);
+  actions.appendChild(deleteBtn);
+  actions.appendChild(createCopyButton(url));
   return li;
 }
 
@@ -1070,33 +1068,13 @@ function renderHistoryBatch(items, offset, limit, keywords, resultsHistory) {
 }
 
 function createHistoryLi(h, keywords) {
-  const li = document.createElement("li");
-  li.className = "list-group-item result-item";
-
-  const url = h.url;
-  const isOpen = openTabUrls.has(url);
-
-  // Feature 9: Open tab badge
-  if (isOpen) {
-    const openBadge = document.createElement("span");
-    openBadge.className = "open-tab-badge";
-    openBadge.textContent = t("ui_openTab");
-    li.appendChild(openBadge);
-  }
-
-  // Favicon
-  if (userOptions.showFavicons) {
-    const favicon = document.createElement("img");
-    favicon.className = "me-1";
-    applyFavicon(favicon, url);
-    li.appendChild(favicon);
-  }
+  const { li, details, actions } = createResultRow(h, keywords);
 
   if (h.isRecentlyClosed) {
     const closedBadge = document.createElement("span");
     closedBadge.className = "badge bg-warning text-dark me-1";
     closedBadge.textContent = t("ui_recentlyClosed", "Recently closed");
-    li.appendChild(closedBadge);
+    details.appendChild(closedBadge);
   }
 
   // Elapsed time badge
@@ -1105,39 +1083,12 @@ function createHistoryLi(h, keywords) {
     const elapsedBadge = document.createElement("span");
     elapsedBadge.className = "badge bg-primary me-1";
     elapsedBadge.textContent = PopupSearch.formatElapsedTime(activityTime, tx, t);
-    li.appendChild(elapsedBadge);
+    details.appendChild(elapsedBadge);
   }
 
-  appendVisitMetricBadges(li, h);
+  appendVisitMetricBadges(details, h);
 
-  // Title link
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.innerHTML = PopupSearch.highlightKeywords(h.title || "", keywords, userOptions.highlight);
-  li.appendChild(a);
-
-  // URL display
-  const urlDiv = document.createElement("div");
-  urlDiv.className = "url-text text-muted small ms-4";
-  urlDiv.title = url;
-  urlDiv.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
-  li.appendChild(urlDiv);
-
-  li.title = url;
-
-  // Feature 4: Copy button
-  li.appendChild(createCopyButton(url));
-
-  // Click to open
-  li.addEventListener("click", (e) => {
-    if (e.target.tagName.toLowerCase() === "a") return;
-    if (e.target.closest(".copy-btn")) return;
-    document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
-    li.classList.add("selected");
-    window.open(url, "_blank");
-  });
-
+  actions.appendChild(createCopyButton(h.url));
   return li;
 }
 

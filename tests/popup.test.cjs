@@ -257,6 +257,30 @@ test("createHistoryLi assigns an unescaped URL to anchor.href", () => {
   assert.equal(item.querySelector("a").href, url);
 });
 
+test("bookmark and history rows put the title before metadata and keep actions together", () => {
+  const { api } = loadPopup();
+  const url = "https://example.test/guide";
+  const item = { title: "Guide", url, folderPath: ["Research"], isRecentlyClosed: true, periodVisitCount: 2 };
+  for (const [createRow, buttonClasses] of [
+    [api.createBookmarkLi, ["edit-btn", "delete-btn", "copy-btn"]],
+    [api.createHistoryLi, ["copy-btn"]]
+  ]) {
+    const [title, details, actions] = createRow(item, []).children;
+    assert.equal(title.tagName, "A");
+    assert.equal(title.href, url);
+    assert.ok(title.classList.contains("result-title"));
+    assert.ok(details.children.some(el => el.title === url));
+    assert.ok(details.children.some(el => el.classList.contains("badge")));
+    assert.ok(actions.classList.contains("item-actions"));
+    assert.deepEqual(actions.children.map(el => el.className.split(" ")[0]), buttonClasses);
+
+    const untitled = createRow({ url }, []);
+    const link = untitled.children[0];
+    assert.equal(link.textContent || link.innerHTML, url);
+    assert.equal(untitled.children[1].children.length, 0);
+  }
+});
+
 test("filterBookmarkItems returns no bookmarks when every domain or folder is unchecked", () => {
   const { api, document } = loadPopup();
   const bookmark = {

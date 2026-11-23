@@ -7,8 +7,38 @@ body {
     flex-direction: column;
 }
 
-.result a {
+.result .result-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 0.5rem;
+}
+
+.result-title {
+    grid-area: 1 / 1;
+    justify-self: start;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     text-decoration: none;
+}
+
+.result-details {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem;
+    margin-top: 0.15rem;
+}
+
+.result-details:empty {
+    display: none;
+}
+
+.result-details .badge {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .nav-tabs {
@@ -53,6 +83,8 @@ body {
 }
 
 .url-text {
+    flex: 1 1 10rem;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -115,12 +147,6 @@ html[data-bs-theme="dark"] mark {
 
 /* --- Copy button --- */
 .copy-btn {
-    position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: 0;
-    transition: opacity 0.15s;
     padding: 2px 6px;
     font-size: 0.75rem;
     line-height: 1.2;
@@ -128,11 +154,6 @@ html[data-bs-theme="dark"] mark {
     border: 1px solid var(--bs-secondary);
     border-radius: 3px;
     color: var(--bs-secondary);
-    z-index: 10;
-}
-
-#resultsWrapper li:hover .copy-btn {
-    opacity: 1;
 }
 
 .copy-btn:hover {
@@ -142,19 +163,27 @@ html[data-bs-theme="dark"] mark {
 
 /* --- Edit / Delete buttons for bookmarks --- */
 .item-actions {
-    position: absolute;
-    right: 32px;
-    top: 50%;
-    transform: translateY(-50%);
+    grid-area: 1 / 2;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.15s;
     display: flex;
     gap: 2px;
-    z-index: 10;
 }
 
-#resultsWrapper li:hover .item-actions {
+.result-item:hover .item-actions,
+.result-item:focus-within .item-actions {
     opacity: 1;
+    pointer-events: auto;
+}
+
+.result-item:focus-within .item-actions {
+    transition: none;
+}
+
+.item-actions button:focus-visible {
+    outline: 2px solid var(--bs-emphasis-color);
+    outline-offset: 1px;
 }
 
 .edit-btn,
@@ -191,6 +220,7 @@ html[data-bs-theme="dark"] mark {
 
 /* --- Inline edit form --- */
 .bookmark-edit-form {
+    grid-column: 1 / -1;
     margin-top: 4px;
     padding: 6px;
     background: var(--bs-light);
