@@ -378,6 +378,11 @@ html[data-bs-theme="dark"] .bookmark-edit-form {
     flex-grow: 1;
 }
 
+.search-input-wrapper .form-control {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
 #saveSearchBtn.is-active {
     color: var(--bs-primary);
     border-color: var(--bs-primary);
