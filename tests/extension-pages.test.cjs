@@ -12,10 +12,13 @@ function loadPage(page, initial = {}) {
   const fields = new Map();
   function element(id) {
     if (!fields.has(id)) fields.set(id, {
-      value: "", style: {}, dataset: {}, parentElement: { style: {} }, listeners: {},
+      value: "", style: {}, dataset: {}, parentElement: { style: {} }, listeners: {}, children: [],
       classList: { toggle() {}, contains() { return false; } },
       addEventListener(type, fn) { this.listeners[type] = fn; },
-      appendChild() {}, focus() {}, setAttribute() {}, getAttribute() { return ""; },
+      appendChild() {}, append(...children) { this.children.push(...children); },
+      replaceChildren(...children) { this.children = children; },
+      focus() { document.activeElement = this; },
+      setAttribute() {}, getAttribute() { return ""; },
       reportValidity() { return false; }
     });
     return fields.get(id);
@@ -162,4 +165,40 @@ test("both pages finish initialization in the default language after a storage r
     const handler = name === "popup" ? page.element("searchInput").listeners.input : page.element("saveBtn").listeners.click;
     assert.equal(typeof handler, "function");
   }
+});
+
+test("excluded domain and folder chips remove only their own checkbox and keep keyboard focus", async () => {
+  const page = loadPage("popup");
+  await page.run("I18N.init().then(translate => { t = translate; })");
+  const list = page.element("excludedFilters");
+  const summary = page.element("filterSummary");
+  const values = [
+    { domain: "docs.test" },
+    { folder: "docs.test" },
+    { folder: '資料 / <メモ> & "原稿"' },
+    { folder: "" }
+  ];
+  const inputs = values.map(dataset => ({
+    dataset, checked: false,
+    click() { this.checked = true; page.run("renderExcludedFilters()"); }
+  }));
+  page.document.querySelectorAll = selector => selector.includes(":not(:checked)")
+    ? inputs.filter(input => !input.checked) : [];
+  page.run("renderExcludedFilters()");
+  const labels = () => list.children.map(chip => chip.title);
+  assert.equal(summary.hidden, false);
+  assert.deepEqual(labels(), ["ドメイン「docs.test」の除外を解除", "フォルダー「docs.test」の除外を解除",
+    'フォルダー「資料 / <メモ> & "原稿"」の除外を解除', "フォルダー「ルートフォルダー」の除外を解除"]);
+  assert.equal(list.children[2].children[1].textContent, values[2].folder);
+  assert.equal(list.children[2].children[2].textContent, "×");
+  list.children[1].focus();
+  list.children[1].listeners.click();
+  assert.deepEqual(inputs.map(input => input.checked), [false, true, false, false]);
+  assert.equal(page.document.activeElement, list.children[1]);
+  while (list.children.length) {
+    list.children[0].focus();
+    list.children[0].listeners.click();
+  }
+  assert.equal(summary.hidden, true);
+  assert.equal(page.document.activeElement, page.element("filterToggle"));
 });

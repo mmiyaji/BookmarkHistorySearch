@@ -230,6 +230,7 @@ function wireEvents() {
 
   const collapseEl = document.getElementById('filterPanel');
   if (collapseEl) {
+    collapseEl.addEventListener('change', renderExcludedFilters);
     collapseEl.addEventListener('shown.bs.collapse', () => {
       if (document.getElementById("searchInput").value.trim() === "") {
         setPopupHeight(320);
@@ -538,8 +539,7 @@ function runSearch() {
     insertMessageItem(resultsAll,        t("ui_enterKeyword"));
     insertMessageItem(resultsBookmarks,  t("ui_enterKeyword"));
     insertMessageItem(resultsHistory,    t("ui_enterKeyword"));
-    renderDomainFilters({});
-    renderFolderFilters([]);
+    renderFilters({}, []);
     return;
   }
 
@@ -553,8 +553,7 @@ function runSearch() {
     insertMessageItem(resultsAll, message);
     insertMessageItem(resultsBookmarks, message);
     insertMessageItem(resultsHistory, message);
-    renderDomainFilters({});
-    renderFolderFilters([]);
+    renderFilters({}, []);
     setPopupHeight(200);
     return;
   }
@@ -575,8 +574,7 @@ function runSearch() {
     ["count-all","count-bookmarks","count-history"].forEach(id => {
       document.getElementById(id).textContent = "0";
     });
-    renderDomainFilters({});
-    renderFolderFilters([]);
+    renderFilters({}, []);
     return;
   }
 
@@ -643,8 +641,7 @@ async function finalizeSearchResults(bookmarks, histories, keywords, searchId, b
   }));
 
   const facetUrls = [...decoratedBookmarks, ...decoratedHistories].map((item) => item.url);
-  renderDomainFilters(PopupSearch.getDomainFacets(userOptions.searchTarget === "both" ? new Set(facetUrls) : facetUrls));
-  renderFolderFilters(decoratedBookmarks);
+  renderFilters(PopupSearch.getDomainFacets(userOptions.searchTarget === "both" ? new Set(facetUrls) : facetUrls), decoratedBookmarks);
   const selectedBookmarks = filterBookmarkItems(decoratedBookmarks);
   const selectedHistories = filterHistoryItems(decoratedHistories);
 
@@ -853,6 +850,53 @@ function setHistoryMetricsNotice(message, isLoading = false) {
   notice.textContent = message || "";
   notice.classList.toggle("d-none", !message);
   notice.setAttribute("aria-busy", isLoading ? "true" : "false");
+}
+
+function renderFilters(domainCounts, bookmarks) {
+  renderDomainFilters(domainCounts);
+  renderFolderFilters(bookmarks);
+  renderExcludedFilters();
+}
+
+function renderExcludedFilters() {
+  const summary = document.getElementById("filterSummary");
+  const list = document.getElementById("excludedFilters");
+  if (!summary || !list) return;
+
+  const focused = document.activeElement;
+  const focusIndex = Array.from(list.children).indexOf(focused);
+  const chips = [];
+  for (const checkbox of document.querySelectorAll("#filterPanel input[data-domain]:not(:checked), #filterPanel input[data-folder]:not(:checked)")) {
+    const isFolder = checkbox.dataset.folder !== undefined;
+    const value = isFolder ? checkbox.dataset.folder || t("ui_rootFolder") : checkbox.dataset.domain;
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "filter-chip btn btn-sm btn-outline-secondary rounded-pill py-0";
+    chip.title = tx(isFolder ? "ui_includeFolder" : "ui_includeDomain", value);
+    chip.setAttribute("aria-label", chip.title);
+
+    const icon = document.createElement("i");
+    icon.className = isFolder ? "fas fa-folder" : "fas fa-globe";
+    icon.setAttribute("aria-hidden", "true");
+    const name = document.createElement("span");
+    name.className = "chip-name";
+    name.textContent = value;
+    const remove = document.createElement("span");
+    remove.setAttribute("aria-hidden", "true");
+    remove.textContent = "×";
+    chip.append(icon, name, remove);
+    chip.addEventListener("click", () => {
+      if (!checkbox.checked) checkbox.click();
+    });
+    chips.push(chip);
+  }
+
+  list.replaceChildren(...chips);
+  summary.hidden = !chips.length;
+  if (focusIndex >= 0) {
+    const next = chips.find(chip => chip.title === focused.title) || chips[Math.min(focusIndex, chips.length - 1)];
+    (next || document.getElementById("filterToggle")).focus();
+  }
 }
 
 function getDomainFilterState() {
