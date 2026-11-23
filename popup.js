@@ -9,7 +9,8 @@ function setDocumentLanguage(locale) {
 }
 
 function refreshDocumentLanguage() {
-  ChromeApi.getSync([LocaleConfig.STORAGE_KEY], (data) => {
+  ChromeApi.getSync([LocaleConfig.STORAGE_KEY], (data, error) => {
+    if (error) return setDocumentLanguage(LocaleConfig.DEFAULT_LOCALE);
     const override = data?.[LocaleConfig.STORAGE_KEY];
     const locale = (!override || override === "auto")
       ? (navigator.languages?.[0] || navigator.language || LocaleConfig.DEFAULT_LOCALE)
@@ -97,7 +98,7 @@ async function bootstrap() {
         popupHeight: parseInt(data.popupHeight) || 600,
         popupWidth: parseInt(data.popupWidth) || 500,
         sortOrder: data.sortOrder || "default",
-        displayLimit: parseInt(data.displayLimit) || 50,
+        displayLimit: DisplayLimit.fromStorage(data.displayLimit),
         enableRecentSearches: data.enableRecentSearches !== false,
         showFavicons: data.showFavicons !== false
       };
@@ -171,6 +172,16 @@ function wireEvents() {
   });
 
   input?.addEventListener("keydown", (e) => {
+    if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      const tabs = Array.from(document.querySelectorAll("#resultTabs .nav-link"))
+        .filter((tab) => tab.offsetParent !== null);
+      if (tabs.length < 2) return;
+      e.preventDefault();
+      const current = tabs.findIndex((tab) => tab.classList.contains("active"));
+      const step = e.key === "ArrowLeft" ? -1 : 1;
+      tabs[(current + step + tabs.length) % tabs.length].click();
+      return;
+    }
     const hasPrimaryModifier = e.ctrlKey || e.metaKey;
     if (hasPrimaryModifier && e.key.toLowerCase() === "s") {
       e.preventDefault();
@@ -208,19 +219,6 @@ function wireEvents() {
 
   if (input && input.value.trim() === "") setPopupHeight(200);
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Tab") return;
-    const tabButtons = Array.from(document.querySelectorAll('#resultTabs .nav-link'))
-      .filter(btn => btn.offsetParent !== null);
-    if (!tabButtons.length) return;
-    e.preventDefault();
-    const currentIndex = tabButtons.findIndex(btn => btn.classList.contains("active"));
-    const nextIndex = e.shiftKey
-      ? (currentIndex - 1 + tabButtons.length) % tabButtons.length
-      : (currentIndex + 1) % tabButtons.length;
-    tabButtons[nextIndex].click();
-  });
-
   document.querySelectorAll('#resultTabs .nav-link').forEach(tab => {
     tab.addEventListener('click', () => {
       setActiveTab(tab.dataset.target);
@@ -232,6 +230,7 @@ function wireEvents() {
 
   const collapseEl = document.getElementById('filterPanel');
   if (collapseEl) {
+    collapseEl.addEventListener('change', renderExcludedFilters);
     collapseEl.addEventListener('shown.bs.collapse', () => {
       if (document.getElementById("searchInput").value.trim() === "") {
         setPopupHeight(320);
@@ -282,7 +281,8 @@ function scheduleRecentSearchSave(query) {
 
 function saveRecentSearch(query) {
   if (!userOptions.enableRecentSearches || !query) return;
-  ChromeApi.getLocal("recentSearches", (data) => {
+  ChromeApi.getLocal("recentSearches", (data, error) => {
+    if (error) return;
     let searches = Array.isArray(data.recentSearches) ? data.recentSearches : [];
     searches = searches.filter(s => s !== query);
     searches.unshift(query);
@@ -346,7 +346,8 @@ function hideRecentSearchesDropdown() {
 }
 
 function deleteRecentSearch(query) {
-  ChromeApi.getLocal("recentSearches", (data) => {
+  ChromeApi.getLocal("recentSearches", (data, error) => {
+    if (error) return;
     let searches = Array.isArray(data.recentSearches) ? data.recentSearches : [];
     searches = searches.filter(s => s !== query);
     ChromeApi.setLocal({ recentSearches: searches }, () => {
@@ -362,7 +363,8 @@ function normalizeSavedSearches(savedSearches) {
 }
 
 function loadSavedSearches(callback) {
-  ChromeApi.getSync([SAVED_SEARCHES_KEY], (data) => {
+  ChromeApi.getSync([SAVED_SEARCHES_KEY], (data, error) => {
+    if (error) return;
     callback(normalizeSavedSearches(data?.[SAVED_SEARCHES_KEY]));
   });
 }
@@ -537,8 +539,7 @@ function runSearch() {
     insertMessageItem(resultsAll,        t("ui_enterKeyword"));
     insertMessageItem(resultsBookmarks,  t("ui_enterKeyword"));
     insertMessageItem(resultsHistory,    t("ui_enterKeyword"));
-    renderDomainFilters({});
-    renderFolderFilters([]);
+    renderFilters({}, []);
     return;
   }
 
@@ -552,8 +553,7 @@ function runSearch() {
     insertMessageItem(resultsAll, message);
     insertMessageItem(resultsBookmarks, message);
     insertMessageItem(resultsHistory, message);
-    renderDomainFilters({});
-    renderFolderFilters([]);
+    renderFilters({}, []);
     setPopupHeight(200);
     return;
   }
@@ -574,8 +574,7 @@ function runSearch() {
     ["count-all","count-bookmarks","count-history"].forEach(id => {
       document.getElementById(id).textContent = "0";
     });
-    renderDomainFilters({});
-    renderFolderFilters([]);
+    renderFilters({}, []);
     return;
   }
 
@@ -591,23 +590,21 @@ function runSearch() {
 
     historyMetricsMap = PopupSearch.buildHistoryMetricsMap(historyResults);
 
-    let grouped = PopupSearch.groupHistoryByUrl(historyResults);
-    if (userOptions.groupSameTitle) grouped = PopupSearch.mergeSameTitleHistory(grouped);
-
     const continueWithResults = (recentlyClosedResults = []) => {
       if (thisSearchId !== currentSearchId) return;
 
-      const matchingRecentlyClosed = recentlyClosedResults.filter((item) => matchFn(item));
-      const mergedHistories = PopupSearch.mergeHistoryWithRecentlyClosed(grouped, matchingRecentlyClosed);
-      const allHistories = (userOptions.searchTarget === "history" || userOptions.searchTarget === "both")
-        ? PopupSearch.collectHistoryMatches(mergedHistories, matchFn, isSafeUrl)
-        : [];
+      let allHistories = [];
+      if (userOptions.searchTarget !== "bookmarks") {
+        const matching = PopupSearch.collectHistoryMatches(PopupSearch.groupHistoryByUrl(historyResults), matchFn, isSafeUrl);
+        const grouped = userOptions.groupSameTitle ? PopupSearch.mergeSameTitleHistory(matching) : matching;
+        allHistories = PopupSearch.mergeHistoryWithRecentlyClosed(grouped, recentlyClosedResults.filter(matchFn));
+      }
 
       if (userOptions.searchTarget === "bookmarks" || userOptions.searchTarget === "both") {
         ChromeApi.getBookmarksTree((nodes) => {
           if (thisSearchId !== currentSearchId) return;
-          const allBookmarks = PopupSearch.collectBookmarkMatches(nodes, matchFn, isSafeUrl);
-          finalizeSearchResults(allBookmarks, allHistories, highlightKeywordList, thisSearchId);
+          const { matches, urls } = PopupSearch.findBookmarkResults(nodes, matchFn, isSafeUrl);
+          finalizeSearchResults(matches, allHistories, highlightKeywordList, thisSearchId, urls);
         });
       } else {
         finalizeSearchResults([], allHistories, highlightKeywordList, thisSearchId);
@@ -622,7 +619,7 @@ function runSearch() {
   });
 }
 
-async function finalizeSearchResults(bookmarks, histories, keywords, searchId) {
+async function finalizeSearchResults(bookmarks, histories, keywords, searchId, bookmarkedUrls = new Set()) {
   const decoratedBookmarks = bookmarks.map((bookmark) => {
     const metrics = historyMetricsMap.get(bookmark.url) || {};
     return {
@@ -643,8 +640,8 @@ async function finalizeSearchResults(bookmarks, histories, keywords, searchId) {
     lifetimeVisitCount: Number(historyItem.visitCount) || 0
   }));
 
-  renderDomainFilters(PopupSearch.getDomainFacets([...decoratedBookmarks, ...decoratedHistories]));
-  renderFolderFilters(decoratedBookmarks);
+  const facetUrls = [...decoratedBookmarks, ...decoratedHistories].map((item) => item.url);
+  renderFilters(PopupSearch.getDomainFacets(userOptions.searchTarget === "both" ? new Set(facetUrls) : facetUrls), decoratedBookmarks);
   const selectedBookmarks = filterBookmarkItems(decoratedBookmarks);
   const selectedHistories = filterHistoryItems(decoratedHistories);
 
@@ -661,11 +658,12 @@ async function finalizeSearchResults(bookmarks, histories, keywords, searchId) {
   const resultsBookmarks = document.getElementById("results-bookmarks");
   const resultsHistory = document.getElementById("results-history");
 
-  renderAllItems(filteredBookmarks, filteredHistories, keywords, resultsAll);
+  const combined = PopupSearch.combineResultsByUrl(filteredBookmarks, filteredHistories, bookmarkedUrls);
+  renderAllItems(combined, keywords, resultsAll);
   renderBookmarkItems(filteredBookmarks, keywords, resultsBookmarks);
   renderHistoryItems(filteredHistories, keywords, resultsHistory);
   updateBadgeAndMessages(
-    filteredBookmarks.length + filteredHistories.length,
+    combined.length,
     filteredBookmarks.length,
     filteredHistories.length
   );
@@ -854,6 +852,53 @@ function setHistoryMetricsNotice(message, isLoading = false) {
   notice.setAttribute("aria-busy", isLoading ? "true" : "false");
 }
 
+function renderFilters(domainCounts, bookmarks) {
+  renderDomainFilters(domainCounts);
+  renderFolderFilters(bookmarks);
+  renderExcludedFilters();
+}
+
+function renderExcludedFilters() {
+  const summary = document.getElementById("filterSummary");
+  const list = document.getElementById("excludedFilters");
+  if (!summary || !list) return;
+
+  const focused = document.activeElement;
+  const focusIndex = Array.from(list.children).indexOf(focused);
+  const chips = [];
+  for (const checkbox of document.querySelectorAll("#filterPanel input[data-domain]:not(:checked), #filterPanel input[data-folder]:not(:checked)")) {
+    const isFolder = checkbox.dataset.folder !== undefined;
+    const value = isFolder ? checkbox.dataset.folder || t("ui_rootFolder") : checkbox.dataset.domain;
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "filter-chip btn btn-sm btn-outline-secondary rounded-pill py-0";
+    chip.title = tx(isFolder ? "ui_includeFolder" : "ui_includeDomain", value);
+    chip.setAttribute("aria-label", chip.title);
+
+    const icon = document.createElement("i");
+    icon.className = isFolder ? "fas fa-folder" : "fas fa-globe";
+    icon.setAttribute("aria-hidden", "true");
+    const name = document.createElement("span");
+    name.className = "chip-name";
+    name.textContent = value;
+    const remove = document.createElement("span");
+    remove.setAttribute("aria-hidden", "true");
+    remove.textContent = "×";
+    chip.append(icon, name, remove);
+    chip.addEventListener("click", () => {
+      if (!checkbox.checked) checkbox.click();
+    });
+    chips.push(chip);
+  }
+
+  list.replaceChildren(...chips);
+  summary.hidden = !chips.length;
+  if (focusIndex >= 0) {
+    const next = chips.find(chip => chip.title === focused.title) || chips[Math.min(focusIndex, chips.length - 1)];
+    (next || document.getElementById("filterToggle")).focus();
+  }
+}
+
 function getDomainFilterState() {
   const filters = Array.from(document.querySelectorAll("#domainFilters input[data-domain]"));
   return { hasFilters: filters.length > 0, selected: new Set(filters.filter((cb) => cb.checked).map((cb) => cb.dataset.domain)) };
@@ -886,11 +931,7 @@ function filterHistoryItems(items) {
   });
 }
 
-function renderAllItems(bookmarks, histories, keywords, resultsAll) {
-  const combined = [
-    ...bookmarks.map((item) => ({ ...item, resultType: "bookmark" })),
-    ...histories.map((item) => ({ ...item, resultType: "history" }))
-  ];
+function renderAllItems(combined, keywords, resultsAll) {
   const sorted = PopupSearch.applyOpenTabsPriority(PopupSearch.sortItems(combined, userOptions.sortOrder), openTabUrls);
   renderAllBatch(sorted, 0, userOptions.displayLimit || 50, keywords, resultsAll);
 }
@@ -899,8 +940,8 @@ function renderAllBatch(items, offset, limit, keywords, resultsAll) {
   const batch = items.slice(offset, offset + limit);
   const fragment = document.createDocumentFragment();
   for (const item of batch) {
-    fragment.appendChild(item.resultType === "bookmark"
-      ? createBookmarkLi(item, keywords)
+    fragment.appendChild(item.bookmark
+      ? createBookmarkLi(item.bookmark, keywords, item)
       : createHistoryLi(item, keywords));
   }
   resultsAll.appendChild(fragment);
@@ -952,58 +993,78 @@ function appendVisitMetricBadges(li, item) {
   }
 }
 
-function createBookmarkLi(b, keywords) {
+function createResultRow(item, keywords) {
+  const { url } = item;
+  const title = item.title || url;
   const li = document.createElement("li");
   li.className = "list-group-item result-item";
+  li.title = url;
 
-  const url = b.url;
-  const isOpen = openTabUrls.has(url);
+  const link = document.createElement("a");
+  link.className = "result-title";
+  link.href = url;
+  link.target = "_blank";
+  link.innerHTML = PopupSearch.highlightKeywords(title, keywords, userOptions.highlight);
+  li.appendChild(link);
 
-  // Feature 9: Open tab badge
-  if (isOpen) {
+  const details = document.createElement("div");
+  details.className = "result-details";
+  li.appendChild(details);
+  if (item.isBookmarked) {
+    const marker = document.createElement("span");
+    marker.className = "fas fa-bookmark";
+    marker.title = t("ui_bookmarked", "Bookmarked");
+    marker.setAttribute("role", "img");
+    marker.setAttribute("aria-label", marker.title);
+    details.appendChild(marker);
+  }
+  if (userOptions.showFavicons) {
+    const favicon = document.createElement("img");
+    favicon.alt = "";
+    applyFavicon(favicon, url);
+    details.appendChild(favicon);
+  }
+  if (title !== url) {
+    const urlText = document.createElement("span");
+    urlText.className = "url-text text-muted";
+    urlText.title = url;
+    urlText.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
+    details.appendChild(urlText);
+  }
+  if (openTabUrls.has(url)) {
     const openBadge = document.createElement("span");
     openBadge.className = "open-tab-badge";
     openBadge.textContent = t("ui_openTab");
-    li.appendChild(openBadge);
+    details.appendChild(openBadge);
   }
 
-  // Favicon
-  if (userOptions.showFavicons) {
-    const favicon = document.createElement("img");
-    favicon.className = "me-1";
-    applyFavicon(favicon, url);
-    li.appendChild(favicon);
-  }
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  li.appendChild(actions);
+  li.addEventListener("click", (e) => {
+    if (e.target.closest("a, .item-actions, .bookmark-edit-form")) return;
+    document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
+    li.classList.add("selected");
+    window.open(url, "_blank");
+  });
+  return { li, details, actions };
+}
+
+function createBookmarkLi(b, keywords, item = b) {
+  const { li, details, actions } = createResultRow(item, keywords);
+  const url = b.url;
 
   // Folder badge
   if (b.folderPath && b.folderPath.length) {
     const folderBadge = document.createElement("span");
     folderBadge.className = "badge bg-secondary me-1";
     folderBadge.textContent = "📁 " + b.folderPath.join(" / ");
-    li.appendChild(folderBadge);
+    folderBadge.title = folderBadge.textContent;
+    details.appendChild(folderBadge);
   }
 
-  appendVisitMetricBadges(li, b);
-
-  // Title link
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.innerHTML = PopupSearch.highlightKeywords(b.title || "", keywords, userOptions.highlight);
-  li.appendChild(a);
-
-  // URL display
-  const urlDiv = document.createElement("div");
-  urlDiv.className = "url-text text-muted small ms-4";
-  urlDiv.title = url;
-  urlDiv.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
-  li.appendChild(urlDiv);
-
-  li.title = url;
-
-  // Feature 8: Edit/Delete buttons
-  const actionsDiv = document.createElement("div");
-  actionsDiv.className = "item-actions";
+  if (item.resultType === "history") appendHistoryBadges(details, item);
+  appendVisitMetricBadges(details, item);
 
   const editBtn = document.createElement("button");
   editBtn.className = "edit-btn";
@@ -1028,22 +1089,9 @@ function createBookmarkLi(b, keywords) {
     }
   });
 
-  actionsDiv.appendChild(editBtn);
-  actionsDiv.appendChild(deleteBtn);
-  li.appendChild(actionsDiv);
-
-  // Feature 4: Copy button
-  li.appendChild(createCopyButton(url));
-
-  // Click to open
-  li.addEventListener("click", (e) => {
-    if (e.target.tagName.toLowerCase() === "a") return;
-    if (e.target.closest(".item-actions") || e.target.closest(".copy-btn") || e.target.closest(".bookmark-edit-form")) return;
-    document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
-    li.classList.add("selected");
-    window.open(url, "_blank");
-  });
-
+  actions.appendChild(editBtn);
+  actions.appendChild(deleteBtn);
+  actions.appendChild(createCopyButton(url));
   return li;
 }
 
@@ -1070,34 +1118,12 @@ function renderHistoryBatch(items, offset, limit, keywords, resultsHistory) {
   }
 }
 
-function createHistoryLi(h, keywords) {
-  const li = document.createElement("li");
-  li.className = "list-group-item result-item";
-
-  const url = h.url;
-  const isOpen = openTabUrls.has(url);
-
-  // Feature 9: Open tab badge
-  if (isOpen) {
-    const openBadge = document.createElement("span");
-    openBadge.className = "open-tab-badge";
-    openBadge.textContent = t("ui_openTab");
-    li.appendChild(openBadge);
-  }
-
-  // Favicon
-  if (userOptions.showFavicons) {
-    const favicon = document.createElement("img");
-    favicon.className = "me-1";
-    applyFavicon(favicon, url);
-    li.appendChild(favicon);
-  }
-
+function appendHistoryBadges(details, h) {
   if (h.isRecentlyClosed) {
     const closedBadge = document.createElement("span");
     closedBadge.className = "badge bg-warning text-dark me-1";
     closedBadge.textContent = t("ui_recentlyClosed", "Recently closed");
-    li.appendChild(closedBadge);
+    details.appendChild(closedBadge);
   }
 
   // Elapsed time badge
@@ -1106,39 +1132,16 @@ function createHistoryLi(h, keywords) {
     const elapsedBadge = document.createElement("span");
     elapsedBadge.className = "badge bg-primary me-1";
     elapsedBadge.textContent = PopupSearch.formatElapsedTime(activityTime, tx, t);
-    li.appendChild(elapsedBadge);
+    details.appendChild(elapsedBadge);
   }
+}
 
-  appendVisitMetricBadges(li, h);
+function createHistoryLi(h, keywords) {
+  const { li, details, actions } = createResultRow(h, keywords);
+  appendHistoryBadges(details, h);
+  appendVisitMetricBadges(details, h);
 
-  // Title link
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.innerHTML = PopupSearch.highlightKeywords(h.title || "", keywords, userOptions.highlight);
-  li.appendChild(a);
-
-  // URL display
-  const urlDiv = document.createElement("div");
-  urlDiv.className = "url-text text-muted small ms-4";
-  urlDiv.title = url;
-  urlDiv.innerHTML = PopupSearch.highlightKeywords(url, keywords, userOptions.highlight);
-  li.appendChild(urlDiv);
-
-  li.title = url;
-
-  // Feature 4: Copy button
-  li.appendChild(createCopyButton(url));
-
-  // Click to open
-  li.addEventListener("click", (e) => {
-    if (e.target.tagName.toLowerCase() === "a") return;
-    if (e.target.closest(".copy-btn")) return;
-    document.querySelectorAll("#resultsWrapper li").forEach(el => el.classList.remove("selected"));
-    li.classList.add("selected");
-    window.open(url, "_blank");
-  });
-
+  actions.appendChild(createCopyButton(h.url));
   return li;
 }
 

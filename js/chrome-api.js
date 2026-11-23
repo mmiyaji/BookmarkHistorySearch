@@ -1,6 +1,19 @@
 const ChromeApi = (() => {
+  // Reads chrome.runtime.lastError so failures never surface as unchecked
+  // errors, and hands callbacks a safe fallback value instead of undefined.
+  function guard(callback, fallback) {
+    return (result) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        console.warn("Chrome API error:", error.message);
+        result = undefined;
+      }
+      if (callback) callback(result === undefined ? fallback() : result, error);
+    };
+  }
+
   function getSync(keys, callback) {
-    chrome.storage.sync.get(keys, callback);
+    chrome.storage.sync.get(keys, guard(callback, () => ({})));
   }
 
   function setSync(data, callback) {
@@ -8,7 +21,7 @@ const ChromeApi = (() => {
   }
 
   function getLocal(key, callback) {
-    chrome.storage.local.get(key, callback);
+    chrome.storage.local.get(key, guard(callback, () => ({})));
   }
 
   function setLocal(data, callback) {

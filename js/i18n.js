@@ -4,7 +4,8 @@ const I18N = (() => {
 
   async function getLocale() {
     return new Promise((resolve) => {
-      chrome.storage.sync.get({ [STORAGE_KEY]: "auto" }, (cfg) => {
+      ChromeApi.getSync({ [STORAGE_KEY]: "auto" }, (cfg, error) => {
+        if (error) return resolve(LocaleConfig.DEFAULT_LOCALE);
         const override = cfg[STORAGE_KEY];
         if (override && override !== "auto") {
           return resolve(LocaleConfig.normalizeLocale(override));

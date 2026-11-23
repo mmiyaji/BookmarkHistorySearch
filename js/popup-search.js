@@ -1,13 +1,20 @@
 const PopupSearch = (() => {
   const FIELD_PREFIXES = ["site", "title", "url"];
+  const MAX_REGEX_LENGTH = 200;
+  // Rejects classic catastrophic-backtracking shapes such as (a+)+ or (a*)*.
+  const LITERAL_REGEX_ATOMS = /\\[\s\S]|\[(?:\\[\s\S]|[^\]\\])*\]/g;
+  const NESTED_QUANTIFIER_RE = /\([^()]*[+*][^()]*\)[+*{]/;
+  const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-  function normalizeForSearch(str) {
+  function foldForSearch(str) {
     return str
       .normalize("NFKC")
       .toLowerCase()
-      .replace(/[\u30a1-\u30f6]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60))
-      .replace(/\s+/g, " ")
-      .trim();
+      .replace(/[\u30a1-\u30f6]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+  }
+
+  function normalizeForSearch(str) {
+    return foldForSearch(str).replace(/\s+/g, " ").trim();
   }
 
   function parseStructuredToken(token) {
@@ -66,6 +73,9 @@ const PopupSearch = (() => {
   function buildMatchFn(rawQuery, searchMode) {
     if (searchMode === "regex") {
       let regex;
+      if (rawQuery.length > MAX_REGEX_LENGTH || NESTED_QUANTIFIER_RE.test(rawQuery.replace(LITERAL_REGEX_ATOMS, "_"))) {
+        return { fn: null, includeKeywords: [], excludeKeywords: [], error: "pattern too complex" };
+      }
       try {
         regex = new RegExp(rawQuery, "i");
       } catch (err) {
@@ -138,37 +148,74 @@ const PopupSearch = (() => {
       .replace(/'/g, "&#39;");
   }
 
-  function highlightKeywords(text, rawKeywords, highlightEnabled) {
-    if (!rawKeywords?.length || !highlightEnabled) return escapeHtml(text);
-    const normalizedText = normalizeForSearch(text);
+  // NFKD gives the original and composed text a common coordinate system.
+  // Several original Jamo can form one grapheme; a single ㍿ can form four.
+  function foldedSourceRanges(text, folded) {
+    const composed = text.normalize("NFKC");
+    if (composed === text && folded.length === text.length) return null;
+
+    const decomposedRanges = [];
+    let start = 0;
+    for (const char of text) {
+      const range = { start, end: start + char.length };
+      for (let i = 0; i < char.normalize("NFKD").length; i++) decomposedRanges.push(range);
+      start = range.end;
+    }
+
+    const ranges = [];
+    let offset = 0;
+    for (const { segment } of graphemes.segment(composed)) {
+      const next = offset + segment.normalize("NFKD").length;
+      const range = { start: decomposedRanges[offset].start, end: decomposedRanges[next - 1].end };
+      // Use only the length here. The actual folded text retains context such
+      // as the final sigma in Greek, which depends on the surrounding letters.
+      const length = segment.toLowerCase().length;
+      for (let i = 0; i < length; i++) ranges.push(range);
+      offset = next;
+    }
+    return ranges;
+  }
+
+  // Returns [{ text, mark }] so callers can build DOM nodes without innerHTML.
+  function highlightSegments(text, rawKeywords, highlightEnabled) {
+    text = String(text ?? "");
+    if (!rawKeywords?.length || !highlightEnabled) return [{ text, mark: false }];
+    const folded = foldForSearch(text);
+    const ranges = foldedSourceRanges(text, folded);
+    const normalized = folded.replace(/\s+/g, " ");
+    // Each collapsed run occupies one search offset, including leading space.
+    const boundaries = normalized.length === folded.length ? null : [0];
+    if (boundaries) {
+      for (const match of folded.matchAll(/\s+|\S/g)) boundaries.push(match.index + match[0].length);
+    }
     const highlightMap = new Array(text.length).fill(false);
     for (const raw of rawKeywords) {
       if (!raw) continue;
       const normKey = normalizeForSearch(raw);
       if (!normKey) continue;
-      let start = 0;
-      while (true) {
-        const index = normalizedText.indexOf(normKey, start);
-        if (index === -1) break;
-        for (let i = index; i < index + normKey.length; i++) highlightMap[i] = true;
-        start = index + normKey.length;
+      let index = normalized.indexOf(normKey);
+      while (index !== -1) {
+        const next = index + normKey.length;
+        const begin = boundaries ? boundaries[index] : index;
+        const end = boundaries ? boundaries[next] : next;
+        highlightMap.fill(true, ranges ? ranges[begin].start : begin, ranges ? ranges[end - 1].end : end);
+        index = normalized.indexOf(normKey, next);
       }
     }
 
-    let result = "";
-    let inMark = false;
+    const segments = [];
     for (let i = 0; i < text.length; i++) {
-      if (highlightMap[i] && !inMark) {
-        result += "<mark>";
-        inMark = true;
-      } else if (!highlightMap[i] && inMark) {
-        result += "</mark>";
-        inMark = false;
-      }
-      result += escapeHtml(text[i]);
+      const last = segments[segments.length - 1];
+      if (last && last.mark === highlightMap[i]) last.text += text[i];
+      else segments.push({ text: text[i], mark: highlightMap[i] });
     }
-    if (inMark) result += "</mark>";
-    return result;
+    return segments;
+  }
+
+  function highlightKeywords(text, rawKeywords, highlightEnabled) {
+    return highlightSegments(text, rawKeywords, highlightEnabled)
+      .map((seg) => (seg.mark ? `<mark>${escapeHtml(seg.text)}</mark>` : escapeHtml(seg.text)))
+      .join("");
   }
 
   function collectBookmarks(nodes, result, path = []) {
@@ -196,10 +243,32 @@ const PopupSearch = (() => {
     };
   }
 
-  function collectBookmarkMatches(nodes, matchFn, isSafeUrl) {
+  function findBookmarkResults(nodes, matchFn, isSafeUrl) {
     const all = [];
     collectBookmarks(nodes, all);
-    return all.filter((bookmark) => isSafeUrl(bookmark.url) && matchFn(toSearchItem(bookmark)));
+    return {
+      matches: all.filter((bookmark) => isSafeUrl(bookmark.url) && matchFn(toSearchItem(bookmark))),
+      urls: new Set(all.map((bookmark) => bookmark.url))
+    };
+  }
+
+  function combineResultsByUrl(bookmarks, histories, bookmarkedUrls) {
+    const rows = new Map();
+    for (const bookmark of bookmarks) {
+      if (!rows.has(bookmark.url)) {
+        rows.set(bookmark.url, { ...bookmark, bookmark, isBookmarked: true });
+      }
+    }
+    for (const history of histories) {
+      const bookmark = rows.get(history.url)?.bookmark;
+      rows.set(history.url, {
+        ...history,
+        title: bookmark?.title || history.title,
+        bookmark,
+        isBookmarked: Boolean(bookmark) || bookmarkedUrls.has(history.url)
+      });
+    }
+    return Array.from(rows.values());
   }
 
   function collectHistoryMatches(grouped, matchFn, isSafeUrl) {
@@ -395,11 +464,11 @@ const PopupSearch = (() => {
     return t("ui_justNow");
   }
 
-  function getDomainFacets(results) {
+  function getDomainFacets(urls) {
     const countMap = {};
-    for (const item of results) {
+    for (const url of urls) {
       try {
-        const domain = new URL(item.url).hostname;
+        const domain = new URL(url).hostname;
         countMap[domain] = (countMap[domain] || 0) + 1;
       } catch {}
     }
@@ -411,7 +480,8 @@ const PopupSearch = (() => {
     buildHistoryVisitMap,
     buildHistoryMetricsMap,
     buildMatchFn,
-    collectBookmarkMatches,
+    combineResultsByUrl,
+    findBookmarkResults,
     collectHistoryMatches,
     formatElapsedTime,
     getDomainFacets,

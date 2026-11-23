@@ -25,6 +25,29 @@ function loadPopupSearch() {
 
 const PopupSearch = loadPopupSearch();
 
+test("combined results retain the matching bookmark identity and use history metrics only once", () => {
+  const url = "https://example.test/doc";
+  const nodes = [{ title: "Folder", children: [
+    { id: "a", url, title: "Saved guide" },
+    { id: "b", url, title: "Saved copy" },
+    { id: "c", url: url + "?v=1", title: "Manual" }
+  ] }];
+  const { matches, urls } = PopupSearch.findBookmarkResults(nodes, item => item.title.includes("Saved"), () => true);
+  const history = { url, title: "Visited guide", periodVisitCount: 7, trendDelta: 3 };
+  const other = { url: url + "?v=1", title: "Saved edition", periodVisitCount: 8 };
+  const rows = PopupSearch.combineResultsByUrl(matches, [history, other], urls);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].bookmark.id, "a");
+  assert.equal(rows[0].periodVisitCount, 7);
+  assert.equal(rows[0].trendDelta, 3);
+  assert.equal(PopupSearch.sortItems(rows, "visitCount")[0].url, other.url);
+  assert.equal(rows[1].isBookmarked, true);
+  assert.equal(rows[1].bookmark, undefined);
+  const [filtered] = PopupSearch.combineResultsByUrl([matches[1]], [history], urls);
+  assert.equal(filtered.bookmark.id, "b");
+  assert.equal(history.title, "Visited guide");
+});
+
 function searchItem({ title = "", url = "", site = "" } = {}) {
   return {
     title,
@@ -400,4 +423,26 @@ test("mergeHistoryWithRecentlyClosed keeps visit time and close time as separate
   assert.equal(merged.closedAt, 2_000);
   assert.equal(merged.sessionId, "recent-session");
   assert.equal(merged.isRecentlyClosed, true);
+});
+
+test("regex complexity checks distinguish literal characters from quantifiers", () => {
+  for (const pattern of [String.raw`([+])+`, String.raw`(\+)+`, String.raw`([\]*])+`]) {
+    const { fn } = PopupSearch.buildMatchFn(pattern, "regex");
+    assert.equal(typeof fn, "function", pattern);
+    assert.equal(fn(searchItem({ title: "++**" })), true);
+  }
+  assert.equal(PopupSearch.buildMatchFn("([a-z]+)+", "regex").fn, null);
+});
+
+test("matched Unicode keywords highlight the corresponding original text", () => {
+  for (const [original, query] of [
+    ["한글", "한글"], ["ΟΣ", "ος"], ["ㅎㅏ", "하"], ["İ", "i\u0307"], ["ﾊﾞ", "ば"]
+  ]) {
+    const title = "  <" + original + "> ABC";
+    const { fn, includeKeywords } = PopupSearch.buildMatchFn(query + " abc", "and");
+    assert.equal(fn(searchItem({ title })), true, query);
+    assert.equal(PopupSearch.highlightKeywords(title, includeKeywords, true),
+      "  &lt;<mark>" + original + "</mark>&gt; <mark>ABC</mark>");
+  }
+  assert.equal(PopupSearch.highlightKeywords(" A \t B ", ["a b"], true), " <mark>A \t B</mark> ");
 });

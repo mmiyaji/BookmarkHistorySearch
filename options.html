@@ -8,6 +8,8 @@
 
   <!-- i18n を options.js より先に読み込む -->
   <script defer src="js/locales.js"></script>
+  <script defer src="js/chrome-api.js"></script>
+  <script defer src="js/display-limit.js"></script>
   <script defer src="js/i18n.js"></script>
   <script defer src="options.js"></script>
 </head>
@@ -89,7 +91,7 @@
 
     <div class="mb-4">
       <label class="form-label" data-i18n="opt_displayLimit">1ページの表示件数</label>
-      <input type="number" class="form-control" id="displayLimit" min="10" max="500" step="10">
+      <input type="number" class="form-control" id="displayLimit" min="10" max="500" step="1" required>
       <div class="form-text" data-i18n="opt_displayLimit_note">
         「もっと見る」ボタンで追加表示します。
       </div>
